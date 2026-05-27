@@ -82,13 +82,13 @@
             {
               "id": "field-005",
               "name": "date",
-              "value": "={{ $now.format('dd/MM/yyyy') }}",
+              "value": "={{ $now.setZone('Asia/Singapore').format('dd/MM/yyyy') }}",
               "type": "string"
             },
             {
               "id": "field-006",
               "name": "time",
-              "value": "={{ $now.format('HH:mm:ss') }}",
+              "value": "={{ $now.setZone('Asia/Singapore').format('HH:mm:ss') }}",
               "type": "string"
             },
             {
