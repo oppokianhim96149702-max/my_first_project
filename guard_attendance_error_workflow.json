@@ -1,0 +1,49 @@
+{
+  "name": "Guard Attendance - Error Alert",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "err-trigger-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_ADMIN_TELEGRAM_CHAT_ID",
+        "text": "=🚨 *Guard Attendance Workflow Error*\n\n📋 *Workflow:* {{ $json.workflow.name }}\n❌ *Failed Node:* {{ $json.error.node ? $json.error.node.name : 'Unknown' }}\n💬 *Error:* {{ $json.error.message }}\n🕐 *Time:* {{ $now.setZone('Asia/Singapore').format('dd/MM/yyyy HH:mm:ss') }}\n🔗 *Execution ID:* {{ $json.execution.id }}\n\n⚠️ A guard attendance record may NOT have been saved\\. Please check Google Sheets and n8n execution logs\\.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "err-telegram-001",
+      "name": "Notify Admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [240, 0],
+      "credentials": {
+        "telegramApi": {
+          "id": "tU4R9SEuNlBNrZWs",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [{ "node": "Notify Admin", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "tags": [
+    { "name": "attendance" },
+    { "name": "error-handling" }
+  ]
+}
