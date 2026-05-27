@@ -173,7 +173,8 @@
     },
     {
       "parameters": {
-        "jsCode": "const telegramId = String($('Merge Attendance + Site').item.json.telegram_id);\nconst today = $('Merge Attendance + Site').item.json.date;\nconst rows = $input.all();\n\n// Check if this guard already has a row for today\nconst duplicate = rows.some(row =>\n  String(row.json['Telegram_ID']) === telegramId &&\n  String(row.json['Date']) === today\n);\n\n// Always returns 1 item\nreturn [{ json: { duplicate } }];"
+        "mode": "runOnceForAllItems",
+        "jsCode": "const telegramId = String($('Merge Attendance + Site').item.json.telegram_id);\nconst today = $('Merge Attendance + Site').item.json.date;\nconst rows = $input.all();\n\n// Sheet is empty — no duplicate possible, allow check-in\nif (rows.length === 0) {\n  return [{ json: { duplicate: false } }];\n}\n\n// Match Telegram_ID AND Date — both cast to string defensively\nconst duplicate = rows.some(row =>\n  String(row.json['Telegram_ID'] || '') === telegramId &&\n  String(row.json['Date'] || '') === today\n);\n\nreturn [{ json: { duplicate } }];"
       },
       "id": "cc000002-0002-0002-0002-000000000002",
       "name": "Check Duplicate",
