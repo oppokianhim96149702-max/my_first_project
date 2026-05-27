@@ -1,0 +1,271 @@
+{
+  "name": "Guard Relief Deployment",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "relief-trigger-001",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-1800, 0],
+      "webhookId": "guard-relief-webhook",
+      "credentials": {
+        "telegramApi": {
+          "id": "tU4R9SEuNlBNrZWs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [
+            {
+              "id": "relief-cmd-001",
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "/relief",
+              "operator": { "type": "string", "operation": "startsWith" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "relief-filter-001",
+      "name": "Is Relief Command?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [-1580, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "relief-info-001",
+              "name": "site",
+              "value": "={{ $json.message.text.replace('/relief', '').trim() || 'Unknown Site' }}",
+              "type": "string"
+            },
+            {
+              "id": "relief-info-002",
+              "name": "date",
+              "value": "={{ $now.setZone('Asia/Singapore').format('dd/MM/yyyy') }}",
+              "type": "string"
+            },
+            {
+              "id": "relief-info-003",
+              "name": "admin_chat_id",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "string"
+            },
+            {
+              "id": "relief-info-004",
+              "name": "admin_name",
+              "value": "={{ $json.message.from.first_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "relief-extract-001",
+      "name": "Extract Relief Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1360, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lVfttRACRs36fxUkQK-wLB9-bUhq6pPHWaW0_IlltzY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Relief",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "relief-read-pool-001",
+      "name": "Read Relief Guards",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-1140, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkooqHE06zipBeCm",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "relief-read-att-001",
+      "name": "Read Attendance Today",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-920, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkooqHE06zipBeCm",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const site        = $('Extract Relief Info').item.json.site;\nconst date        = $('Extract Relief Info').item.json.date;\nconst adminChatId = $('Extract Relief Info').item.json.admin_chat_id;\n\n// All relief guards from pool\nconst reliefPool = $('Read Relief Guards').all();\n\n// Guards already deployed today (in attendance sheet)\nconst attendanceRows = $input.all();\nconst deployedToday = attendanceRows\n  .filter(r => String(r.json['Date'] || '').trim() === date)\n  .map(r => String(r.json['Telegram_ID'] || '').trim());\n\n// Find first available relief guard not deployed today\nconst available = reliefPool.find(r => {\n  const tid   = String(r.json['Telegram_ID'] || '').trim();\n  const avail = String(r.json['Availability'] || '').toLowerCase();\n  return tid !== '' && avail === 'available' && !deployedToday.includes(tid);\n});\n\nif (!available) {\n  return [{\n    json: {\n      found: false,\n      site,\n      date,\n      admin_chat_id: adminChatId\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    found: true,\n    telegram_id:  String(available.json['Telegram_ID']).trim(),\n    guard_name:   available.json['Guard Name']  || 'Relief Guard',\n    phone:        available.json['Phone']        || 'N/A',\n    site,\n    date,\n    admin_chat_id: adminChatId\n  }\n}];"
+      },
+      "id": "relief-find-001",
+      "name": "Find Available Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-700, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [
+            {
+              "id": "relief-avail-001",
+              "leftValue": "={{ $json.found }}",
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "relief-check-001",
+      "name": "Guard Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-480, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "=🚨 *Urgent Relief Deployment*\n\n👤 *Guard:* {{ $json.guard_name }}\n📍 *Site:* {{ $json.site }}\n📅 *Date:* {{ $json.date }}\n\nA permanent guard is on urgent leave\\. You have been assigned as relief\\. Please proceed to your assigned site and share your *live location* upon arrival to record attendance\\. 🛡️",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "relief-notify-guard-001",
+      "name": "Notify Relief Guard",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-260, -160],
+      "credentials": {
+        "telegramApi": {
+          "id": "tU4R9SEuNlBNrZWs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.admin_chat_id }}",
+        "text": "=✅ *Relief Guard Assigned*\n\n📍 *Site:* {{ $json.site }}\n📅 *Date:* {{ $json.date }}\n👤 *Relief Guard:* {{ $json.guard_name }}\n📞 *Phone:* {{ $json.phone }}\n\nThe guard has been notified via Telegram\\.",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "relief-notify-admin-001",
+      "name": "Notify Admin: Assigned",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-260, 0],
+      "credentials": {
+        "telegramApi": {
+          "id": "tU4R9SEuNlBNrZWs",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.admin_chat_id }}",
+        "text": "=❌ *No Relief Guard Available*\n\n📍 *Site:* {{ $json.site }}\n📅 *Date:* {{ $json.date }}\n\nAll relief guards are currently deployed or unavailable\\. Please arrange cover manually\\.",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "relief-no-guard-001",
+      "name": "No Relief Available",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-260, 160],
+      "credentials": {
+        "telegramApi": {
+          "id": "tU4R9SEuNlBNrZWs",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [{ "node": "Is Relief Command?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Relief Command?": {
+      "main": [
+        [{ "node": "Extract Relief Info", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Relief Info": {
+      "main": [
+        [{ "node": "Read Relief Guards", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Relief Guards": {
+      "main": [
+        [{ "node": "Read Attendance Today", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Attendance Today": {
+      "main": [
+        [{ "node": "Find Available Guard", "type": "main", "index": 0 }]
+      ]
+    },
+    "Find Available Guard": {
+      "main": [
+        [{ "node": "Guard Available?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Guard Available?": {
+      "main": [
+        [
+          { "node": "Notify Relief Guard", "type": "main", "index": 0 },
+          { "node": "Notify Admin: Assigned", "type": "main", "index": 0 }
+        ],
+        [{ "node": "No Relief Available", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "x9Bwssy4sHZpw2lY"
+  },
+  "tags": [
+    { "name": "relief" },
+    { "name": "deployment" }
+  ]
+}
