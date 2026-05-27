@@ -1,11 +1,9 @@
 {
-  "name": "Guard Attendance - Check In (Multi)Fix_1_2_3_4",
+  "name": "Guard Attendance - Check In (Multi)Fix_1_2_3_4_6",
   "nodes": [
     {
       "parameters": {
-        "updates": [
-          "message"
-        ],
+        "updates": ["message"],
         "additionalFields": {}
       },
       "id": "7102b6a5-0571-4a94-bde6-085fdf8d5c50",
@@ -15,30 +13,19 @@
       "position": [-1504, 192],
       "webhookId": "guard-attendance-webhook",
       "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
       }
     },
     {
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": false,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 1
-          },
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict", "version": 1 },
           "conditions": [
             {
               "id": "cond-001",
               "leftValue": "={{ $json.message.text }}",
               "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "exists"
-              }
+              "operator": { "type": "string", "operation": "exists" }
             }
           ],
           "combinator": "and"
@@ -54,29 +41,19 @@
     {
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": false,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
           "conditions": [
             {
               "id": "kw-001",
               "leftValue": "={{ $json.message.text.toLowerCase() }}",
               "rightValue": "check in",
-              "operator": {
-                "type": "string",
-                "operation": "contains"
-              }
+              "operator": { "type": "string", "operation": "contains" }
             },
             {
               "id": "kw-002",
               "leftValue": "={{ $json.message.text }}",
               "rightValue": "/",
-              "operator": {
-                "type": "string",
-                "operation": "startsWith"
-              }
+              "operator": { "type": "string", "operation": "startsWith" }
             }
           ],
           "combinator": "or"
@@ -93,54 +70,14 @@
       "parameters": {
         "assignments": {
           "assignments": [
-            {
-              "id": "field-001",
-              "name": "guard_name",
-              "value": "={{ $json.message.from.first_name + ($json.message.from.last_name ? ' ' + $json.message.from.last_name : '') }}",
-              "type": "string"
-            },
-            {
-              "id": "field-002",
-              "name": "telegram_username",
-              "value": "={{ '@' + ($json.message.from.username || 'no_username') }}",
-              "type": "string"
-            },
-            {
-              "id": "field-003",
-              "name": "telegram_id",
-              "value": "={{ String($json.message.from.id) }}",
-              "type": "string"
-            },
-            {
-              "id": "field-004",
-              "name": "message_text",
-              "value": "={{ $json.message.text }}",
-              "type": "string"
-            },
-            {
-              "id": "field-005",
-              "name": "date",
-              "value": "={{ $now.setZone('Asia/Singapore').format('dd/MM/yyyy') }}",
-              "type": "string"
-            },
-            {
-              "id": "field-006",
-              "name": "time",
-              "value": "={{ $now.setZone('Asia/Singapore').format('HH:mm:ss') }}",
-              "type": "string"
-            },
-            {
-              "id": "field-007",
-              "name": "chat_id",
-              "value": "={{ $json.message.chat.id }}",
-              "type": "string"
-            },
-            {
-              "id": "field-008",
-              "name": "unix_timestamp",
-              "value": "={{ $json.message.date }}",
-              "type": "number"
-            }
+            { "id": "field-001", "name": "guard_name", "value": "={{ $json.message.from.first_name + ($json.message.from.last_name ? ' ' + $json.message.from.last_name : '') }}", "type": "string" },
+            { "id": "field-002", "name": "telegram_username", "value": "={{ '@' + ($json.message.from.username || 'no_username') }}", "type": "string" },
+            { "id": "field-003", "name": "telegram_id", "value": "={{ String($json.message.from.id) }}", "type": "string" },
+            { "id": "field-004", "name": "message_text", "value": "={{ $json.message.text }}", "type": "string" },
+            { "id": "field-005", "name": "date", "value": "={{ $now.setZone('Asia/Singapore').format('dd/MM/yyyy') }}", "type": "string" },
+            { "id": "field-006", "name": "time", "value": "={{ $now.setZone('Asia/Singapore').format('HH:mm:ss') }}", "type": "string" },
+            { "id": "field-007", "name": "chat_id", "value": "={{ $json.message.chat.id }}", "type": "string" },
+            { "id": "field-008", "name": "unix_timestamp", "value": "={{ $json.message.date }}", "type": "number" }
           ]
         },
         "options": {}
@@ -153,16 +90,8 @@
     },
     {
       "parameters": {
-        "documentId": {
-          "__rl": true,
-          "value": "1lVfttRACRs36fxUkQK-wLB9-bUhq6pPHWaW0_IlltzY",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Guards",
-          "mode": "name"
-        },
+        "documentId": { "__rl": true, "value": "1lVfttRACRs36fxUkQK-wLB9-bUhq6pPHWaW0_IlltzY", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
         "options": {}
       },
       "id": "c06200b2-f15e-4faf-b639-9033377ff0ef",
@@ -171,15 +100,12 @@
       "typeVersion": 4.5,
       "position": [-832, 192],
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "fkooqHE06zipBeCm",
-          "name": "Google Sheets OAuth2 API"
-        }
+        "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" }
       }
     },
     {
       "parameters": {
-        "jsCode": "// Both sides cast to String — prevents number vs text mismatch\nconst telegramId = String($('Extract Attendance Data').item.json.telegram_id);\nconst rows = $input.all();\n\nconst match = rows.find(row => String(row.json['Telegram ID']) === telegramId);\n\n// Always returns exactly 1 item — workflow never silently stops here\nreturn [{\n  json: {\n    found: !!match,\n    assigned_site: match ? (match.json['Assigned Site'] || 'Unassigned') : 'Unassigned'\n  }\n}];"
+        "jsCode": "// Both sides cast to String — prevents number vs text mismatch\nconst telegramId = String($('Extract Attendance Data').item.json.telegram_id);\nconst rows = $input.all();\nconst match = rows.find(row => String(row.json['Telegram ID']) === telegramId);\n\n// Always returns exactly 1 item — workflow never silently stops here\nreturn [{\n  json: {\n    found: !!match,\n    assigned_site: match ? (match.json['Assigned Site'] || 'Unassigned') : 'Unassigned'\n  }\n}];"
       },
       "id": "ca4652aa-4cb2-4e85-ac99-17dec5b8e461",
       "name": "Find Guard",
@@ -190,20 +116,12 @@
     {
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 1
-          },
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
           "conditions": [
             {
               "id": "if-found-001",
               "leftValue": "={{ $json.found }}",
-              "operator": {
-                "type": "boolean",
-                "operation": "true"
-              }
+              "operator": { "type": "boolean", "operation": "true" }
             }
           ],
           "combinator": "and"
@@ -220,54 +138,14 @@
       "parameters": {
         "assignments": {
           "assignments": [
-            {
-              "id": "merge-001",
-              "name": "guard_name",
-              "value": "={{ $('Extract Attendance Data').item.json.guard_name }}",
-              "type": "string"
-            },
-            {
-              "id": "merge-002",
-              "name": "telegram_username",
-              "value": "={{ $('Extract Attendance Data').item.json.telegram_username }}",
-              "type": "string"
-            },
-            {
-              "id": "merge-003",
-              "name": "telegram_id",
-              "value": "={{ String($('Extract Attendance Data').item.json.telegram_id) }}",
-              "type": "string"
-            },
-            {
-              "id": "merge-004",
-              "name": "message_text",
-              "value": "={{ $('Extract Attendance Data').item.json.message_text }}",
-              "type": "string"
-            },
-            {
-              "id": "merge-005",
-              "name": "date",
-              "value": "={{ $('Extract Attendance Data').item.json.date }}",
-              "type": "string"
-            },
-            {
-              "id": "merge-006",
-              "name": "time",
-              "value": "={{ $('Extract Attendance Data').item.json.time }}",
-              "type": "string"
-            },
-            {
-              "id": "merge-007",
-              "name": "chat_id",
-              "value": "={{ $('Extract Attendance Data').item.json.chat_id }}",
-              "type": "string"
-            },
-            {
-              "id": "merge-008",
-              "name": "assigned_site",
-              "value": "={{ $json.assigned_site }}",
-              "type": "string"
-            }
+            { "id": "merge-001", "name": "guard_name", "value": "={{ $('Extract Attendance Data').item.json.guard_name }}", "type": "string" },
+            { "id": "merge-002", "name": "telegram_username", "value": "={{ $('Extract Attendance Data').item.json.telegram_username }}", "type": "string" },
+            { "id": "merge-003", "name": "telegram_id", "value": "={{ String($('Extract Attendance Data').item.json.telegram_id) }}", "type": "string" },
+            { "id": "merge-004", "name": "message_text", "value": "={{ $('Extract Attendance Data').item.json.message_text }}", "type": "string" },
+            { "id": "merge-005", "name": "date", "value": "={{ $('Extract Attendance Data').item.json.date }}", "type": "string" },
+            { "id": "merge-006", "name": "time", "value": "={{ $('Extract Attendance Data').item.json.time }}", "type": "string" },
+            { "id": "merge-007", "name": "chat_id", "value": "={{ $('Extract Attendance Data').item.json.chat_id }}", "type": "string" },
+            { "id": "merge-008", "name": "assigned_site", "value": "={{ $json.assigned_site }}", "type": "string" }
           ]
         },
         "options": {}
@@ -280,76 +158,86 @@
     },
     {
       "parameters": {
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
+        "options": {}
+      },
+      "id": "cc000001-0001-0001-0001-000000000001",
+      "name": "Read Attendance Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [64, 32],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const telegramId = String($('Merge Attendance + Site').item.json.telegram_id);\nconst today = $('Merge Attendance + Site').item.json.date;\nconst rows = $input.all();\n\n// Check if this guard already has a row for today\nconst duplicate = rows.some(row =>\n  String(row.json['Telegram_ID']) === telegramId &&\n  String(row.json['Date']) === today\n);\n\n// Always returns 1 item\nreturn [{ json: { duplicate } }];"
+      },
+      "id": "cc000002-0002-0002-0002-000000000002",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [288, 32]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "dup-check-001",
+              "leftValue": "={{ $json.duplicate }}",
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cc000003-0003-0003-0003-000000000003",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [512, 32]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Merge Attendance + Site').item.json.chat_id }}",
+        "text": "=⚠️ *Already Checked In Today*\n\n👤 *Guard:* {{ $('Merge Attendance + Site').item.json.guard_name }}\n📍 *Site:* {{ $('Merge Attendance + Site').item.json.assigned_site }}\n📅 *Date:* {{ $('Merge Attendance + Site').item.json.date }}\n\nYour attendance for today has already been recorded\\.",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "cc000004-0004-0004-0004-000000000004",
+      "name": "Send Already Checked In",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [736, -112],
+      "credentials": {
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
         "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Guards",
-          "mode": "name"
-        },
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "Name": "={{ $json.guard_name }}",
-            "Telegram_ID": "={{ String($json.telegram_id) }}",
-            "Assigned Sites": "={{ $json.assigned_site }}"
+            "Date": "={{ $('Merge Attendance + Site').item.json.date }}",
+            "Name": "={{ $('Merge Attendance + Site').item.json.guard_name }}",
+            "Telegram_ID": "={{ String($('Merge Attendance + Site').item.json.telegram_id) }}",
+            "Assigned Sites": "={{ $('Merge Attendance + Site').item.json.assigned_site }}"
           },
           "matchingColumns": [],
           "schema": [
-            {
-              "id": "Staff ID",
-              "displayName": "Staff ID",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Name",
-              "displayName": "Name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Phone",
-              "displayName": "Phone",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Assigned Sites",
-              "displayName": "Assigned Sites",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Telegram_ID",
-              "displayName": "Telegram_ID",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            }
+            { "id": "Date", "displayName": "Date", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Staff ID", "displayName": "Staff ID", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Name", "displayName": "Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Phone", "displayName": "Phone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Assigned Sites", "displayName": "Assigned Sites", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Telegram_ID", "displayName": "Telegram_ID", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false }
           ],
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
@@ -360,87 +248,39 @@
       "name": "Log to Google Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [64, 32],
+      "position": [736, 32],
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "fkooqHE06zipBeCm",
-          "name": "Google Sheets OAuth2 API"
-        }
+        "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" }
       }
     },
     {
       "parameters": {
         "chatId": "={{ $('Merge Attendance + Site').item.json.chat_id }}",
         "text": "=✅ *Attendance Recorded!*\n\n👤 *Guard:* {{ $('Merge Attendance + Site').item.json.guard_name }}\n📍 *Site:* {{ $('Merge Attendance + Site').item.json.assigned_site }}\n📅 *Date:* {{ $('Merge Attendance + Site').item.json.date }}\n⏰ *Time:* {{ $('Merge Attendance + Site').item.json.time }}\n📝 *Message:* {{ $('Merge Attendance + Site').item.json.message_text }}\n\nHave a safe shift! 🛡️",
-        "additionalFields": {
-          "parse_mode": "Markdown"
-        }
+        "additionalFields": { "parse_mode": "Markdown" }
       },
       "id": "e08ce355-350a-4c78-862e-0f093a8a1fe6",
       "name": "Send Confirmation to Guard",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [288, 32],
+      "position": [960, 32],
       "webhookId": "c985da9c-15b1-4add-8c80-f35d154ab692",
       "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
       }
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
-            {
-              "id": "fallback-001",
-              "name": "guard_name",
-              "value": "={{ $('Extract Attendance Data').item.json.guard_name }}",
-              "type": "string"
-            },
-            {
-              "id": "fallback-002",
-              "name": "telegram_username",
-              "value": "={{ $('Extract Attendance Data').item.json.telegram_username }}",
-              "type": "string"
-            },
-            {
-              "id": "fallback-003",
-              "name": "telegram_id",
-              "value": "={{ String($('Extract Attendance Data').item.json.telegram_id) }}",
-              "type": "string"
-            },
-            {
-              "id": "fallback-004",
-              "name": "message_text",
-              "value": "={{ $('Extract Attendance Data').item.json.message_text }}",
-              "type": "string"
-            },
-            {
-              "id": "fallback-005",
-              "name": "date",
-              "value": "={{ $('Extract Attendance Data').item.json.date }}",
-              "type": "string"
-            },
-            {
-              "id": "fallback-006",
-              "name": "time",
-              "value": "={{ $('Extract Attendance Data').item.json.time }}",
-              "type": "string"
-            },
-            {
-              "id": "fallback-007",
-              "name": "chat_id",
-              "value": "={{ $('Extract Attendance Data').item.json.chat_id }}",
-              "type": "string"
-            },
-            {
-              "id": "fallback-008",
-              "name": "assigned_site",
-              "value": "Unassigned",
-              "type": "string"
-            }
+            { "id": "fallback-001", "name": "guard_name", "value": "={{ $('Extract Attendance Data').item.json.guard_name }}", "type": "string" },
+            { "id": "fallback-002", "name": "telegram_username", "value": "={{ $('Extract Attendance Data').item.json.telegram_username }}", "type": "string" },
+            { "id": "fallback-003", "name": "telegram_id", "value": "={{ String($('Extract Attendance Data').item.json.telegram_id) }}", "type": "string" },
+            { "id": "fallback-004", "name": "message_text", "value": "={{ $('Extract Attendance Data').item.json.message_text }}", "type": "string" },
+            { "id": "fallback-005", "name": "date", "value": "={{ $('Extract Attendance Data').item.json.date }}", "type": "string" },
+            { "id": "fallback-006", "name": "time", "value": "={{ $('Extract Attendance Data').item.json.time }}", "type": "string" },
+            { "id": "fallback-007", "name": "chat_id", "value": "={{ $('Extract Attendance Data').item.json.chat_id }}", "type": "string" },
+            { "id": "fallback-008", "name": "assigned_site", "value": "Unassigned", "type": "string" }
           ]
         },
         "options": {}
@@ -454,75 +294,24 @@
     {
       "parameters": {
         "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Guards",
-          "mode": "name"
-        },
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
+            "Date": "={{ $json.date }}",
             "Name": "={{ $json.guard_name }}",
             "Telegram_ID": "={{ String($json.telegram_id) }}",
             "Assigned Sites": "Unassigned"
           },
           "matchingColumns": [],
           "schema": [
-            {
-              "id": "Staff ID",
-              "displayName": "Staff ID",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Name",
-              "displayName": "Name",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Phone",
-              "displayName": "Phone",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Assigned Sites",
-              "displayName": "Assigned Sites",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "Telegram_ID",
-              "displayName": "Telegram_ID",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            }
+            { "id": "Date", "displayName": "Date", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Staff ID", "displayName": "Staff ID", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Name", "displayName": "Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Phone", "displayName": "Phone", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Assigned Sites", "displayName": "Assigned Sites", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Telegram_ID", "displayName": "Telegram_ID", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false }
           ],
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
@@ -535,19 +324,14 @@
       "typeVersion": 4.5,
       "position": [64, 352],
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "fkooqHE06zipBeCm",
-          "name": "Google Sheets OAuth2 API"
-        }
+        "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" }
       }
     },
     {
       "parameters": {
         "chatId": "={{ $('Set Fallback Site').item.json.chat_id }}",
         "text": "=⚠️ *Attendance Recorded \\(Unregistered\\)*\n\n👤 *Name:* {{ $('Set Fallback Site').item.json.guard_name }}\n📍 *Site:* Unassigned\n📅 *Date:* {{ $('Set Fallback Site').item.json.date }}\n⏰ *Time:* {{ $('Set Fallback Site').item.json.time }}\n\nYou are not registered in the master list\\. Please contact your supervisor to register your Telegram ID\\.",
-        "additionalFields": {
-          "parse_mode": "MarkdownV2"
-        }
+        "additionalFields": { "parse_mode": "MarkdownV2" }
       },
       "id": "3ebf288b-b51c-4fc5-8a7a-aad2fe2c5bea",
       "name": "Send Not Registered Notice",
@@ -556,44 +340,29 @@
       "position": [288, 352],
       "webhookId": "0d66dcf1-cc7f-4fcc-9fbe-46213a83d3b4",
       "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
       }
     }
   ],
   "pinData": {},
   "connections": {
     "Telegram Trigger": {
-      "main": [
-        [{ "node": "Has Text Message?", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Has Text Message?", "type": "main", "index": 0 }]]
     },
     "Has Text Message?": {
-      "main": [
-        [{ "node": "Is Check In Command?", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Is Check In Command?", "type": "main", "index": 0 }]]
     },
     "Is Check In Command?": {
-      "main": [
-        [{ "node": "Extract Attendance Data", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Extract Attendance Data", "type": "main", "index": 0 }]]
     },
     "Extract Attendance Data": {
-      "main": [
-        [{ "node": "Read All Guards from Master Sheet", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Read All Guards from Master Sheet", "type": "main", "index": 0 }]]
     },
     "Read All Guards from Master Sheet": {
-      "main": [
-        [{ "node": "Find Guard", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Find Guard", "type": "main", "index": 0 }]]
     },
     "Find Guard": {
-      "main": [
-        [{ "node": "Guard Found?", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Guard Found?", "type": "main", "index": 0 }]]
     },
     "Guard Found?": {
       "main": [
@@ -602,24 +371,28 @@
       ]
     },
     "Merge Attendance + Site": {
+      "main": [[{ "node": "Read Attendance Sheet", "type": "main", "index": 0 }]]
+    },
+    "Read Attendance Sheet": {
+      "main": [[{ "node": "Check Duplicate", "type": "main", "index": 0 }]]
+    },
+    "Check Duplicate": {
+      "main": [[{ "node": "Is Duplicate?", "type": "main", "index": 0 }]]
+    },
+    "Is Duplicate?": {
       "main": [
+        [{ "node": "Send Already Checked In", "type": "main", "index": 0 }],
         [{ "node": "Log to Google Sheets", "type": "main", "index": 0 }]
       ]
     },
     "Log to Google Sheets": {
-      "main": [
-        [{ "node": "Send Confirmation to Guard", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Send Confirmation to Guard", "type": "main", "index": 0 }]]
     },
     "Set Fallback Site": {
-      "main": [
-        [{ "node": "Log Unregistered Guard", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Log Unregistered Guard", "type": "main", "index": 0 }]]
     },
     "Log Unregistered Guard": {
-      "main": [
-        [{ "node": "Send Not Registered Notice", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Send Not Registered Notice", "type": "main", "index": 0 }]]
     }
   },
   "active": false,
