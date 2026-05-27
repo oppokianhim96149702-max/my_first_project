@@ -1,5 +1,5 @@
 {
-  "name": "Guard Attendance - Check In (Multi)Fix_1_2",
+  "name": "Guard Attendance - Check In (Multi)Fix_1_2_3_4",
   "nodes": [
     {
       "parameters": {
@@ -50,6 +50,44 @@
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
       "position": [-1280, 192]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "kw-001",
+              "leftValue": "={{ $json.message.text.toLowerCase() }}",
+              "rightValue": "check in",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "kw-002",
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "/",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "bb000001-0001-0001-0001-000000000001",
+      "name": "Is Check In Command?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [-1168, 192]
     },
     {
       "parameters": {
@@ -533,6 +571,11 @@
       ]
     },
     "Has Text Message?": {
+      "main": [
+        [{ "node": "Is Check In Command?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Check In Command?": {
       "main": [
         [{ "node": "Extract Attendance Data", "type": "main", "index": 0 }]
       ]
