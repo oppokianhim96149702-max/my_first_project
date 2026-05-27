@@ -1,0 +1,378 @@
+{
+  "name": "Guard Attendance - Check In (One Side)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [200, 300],
+      "webhookId": "guard-attendance-webhook",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-001",
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-0002-0002-000000000002",
+      "name": "Has Text Message?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-001",
+              "name": "guard_name",
+              "value": "={{ $json.message.from.first_name + ($json.message.from.last_name ? ' ' + $json.message.from.last_name : '') }}",
+              "type": "string"
+            },
+            {
+              "id": "field-002",
+              "name": "telegram_username",
+              "value": "={{ '@' + ($json.message.from.username || 'no_username') }}",
+              "type": "string"
+            },
+            {
+              "id": "field-003",
+              "name": "telegram_id",
+              "value": "={{ $json.message.from.id }}",
+              "type": "string"
+            },
+            {
+              "id": "field-004",
+              "name": "message_text",
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "field-005",
+              "name": "date",
+              "value": "={{ $now.format('dd/MM/yyyy') }}",
+              "type": "string"
+            },
+            {
+              "id": "field-006",
+              "name": "time",
+              "value": "={{ $now.format('HH:mm:ss') }}",
+              "type": "string"
+            },
+            {
+              "id": "field-007",
+              "name": "chat_id",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-0003-0003-000000000003",
+      "name": "Extract Attendance Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_MASTER_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0006-0006-0006-000000000006",
+      "name": "Read All Guards from Master Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [860, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the Telegram ID of the guard who just messaged\nconst telegramId = String($('Extract Attendance Data').item.json.telegram_id);\n\n// $input.all() contains every row from the master Guards sheet\nconst rows = $input.all();\n\n// Find the row where Telegram ID matches (cast both to string to avoid number/text mismatch)\nconst match = rows.find(row => String(row.json['Telegram ID']) === telegramId);\n\n// Always return exactly 1 item — workflow never stops here\nreturn [{\n  json: {\n    assigned_site: match ? (match.json['Assigned Site'] || 'Unassigned') : 'Unassigned'\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0008-0008-0008-000000000008",
+      "name": "Find Assigned Site",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "merge-001",
+              "name": "guard_name",
+              "value": "={{ $('Extract Attendance Data').item.json.guard_name }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-002",
+              "name": "telegram_username",
+              "value": "={{ $('Extract Attendance Data').item.json.telegram_username }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-003",
+              "name": "telegram_id",
+              "value": "={{ $('Extract Attendance Data').item.json.telegram_id }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-004",
+              "name": "message_text",
+              "value": "={{ $('Extract Attendance Data').item.json.message_text }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-005",
+              "name": "date",
+              "value": "={{ $('Extract Attendance Data').item.json.date }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-006",
+              "name": "time",
+              "value": "={{ $('Extract Attendance Data').item.json.time }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-007",
+              "name": "chat_id",
+              "value": "={{ $('Extract Attendance Data').item.json.chat_id }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-008",
+              "name": "assigned_site",
+              "value": "={{ $json.assigned_site }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-0007-0007-000000000007",
+      "name": "Merge Attendance + Site",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1300, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_ATTENDANCE_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $json.date }}",
+            "Time": "={{ $json.time }}",
+            "Guard Name": "={{ $json.guard_name }}",
+            "Assigned Site": "={{ $json.assigned_site }}",
+            "Telegram Username": "={{ $json.telegram_username }}",
+            "Telegram ID": "={{ $json.telegram_id }}",
+            "Message": "={{ $json.message_text }}",
+            "Status": "Check In",
+            "Remarks": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Date", "displayName": "Date", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Time", "displayName": "Time", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Guard Name", "displayName": "Guard Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Assigned Site", "displayName": "Assigned Site", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Telegram Username", "displayName": "Telegram Username", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Telegram ID", "displayName": "Telegram ID", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Message", "displayName": "Message", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Status", "displayName": "Status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Remarks", "displayName": "Remarks", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "a1b2c3d4-0004-0004-0004-000000000004",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1520, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Merge Attendance + Site').item.json.chat_id }}",
+        "text": "=✅ *Attendance Recorded!*\n\n👤 *Guard:* {{ $('Merge Attendance + Site').item.json.guard_name }}\n📍 *Site:* {{ $('Merge Attendance + Site').item.json.assigned_site }}\n📅 *Date:* {{ $('Merge Attendance + Site').item.json.date }}\n⏰ *Time:* {{ $('Merge Attendance + Site').item.json.time }}\n📝 *Message:* {{ $('Merge Attendance + Site').item.json.message_text }}\n\nHave a safe shift! 🛡️",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "a1b2c3d4-0005-0005-0005-000000000005",
+      "name": "Send Confirmation to Guard",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1740, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram Bot Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Has Text Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Text Message?": {
+      "main": [
+        [
+          {
+            "node": "Extract Attendance Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Attendance Data": {
+      "main": [
+        [
+          {
+            "node": "Read All Guards from Master Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read All Guards from Master Sheet": {
+      "main": [
+        [
+          {
+            "node": "Find Assigned Site",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Assigned Site": {
+      "main": [
+        [
+          {
+            "node": "Merge Attendance + Site",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Attendance + Site": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation to Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "attendance" },
+    { "name": "guard" },
+    { "name": "telegram" }
+  ],
+  "triggerCount": 1,
+  "versionId": "3"
+}

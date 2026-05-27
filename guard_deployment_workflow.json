@@ -1,0 +1,105 @@
+{
+  "name": "Guard Deployment - Daily Assignment Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 22 * * *"
+            }
+          ]
+        }
+      },
+      "id": "deploy-sched-001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_DEPLOYMENT_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Deployment",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "deploy-read-001",
+      "name": "Read Deployment Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [220, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkooqHE06zipBeCm",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Tomorrow's date (notify guards the night before)\nconst tomorrow = $now.setZone('Asia/Singapore').plus({ days: 1 }).format('dd/MM/yyyy');\n\nconst rows = $input.all();\n\nconst deployments = rows.filter(r =>\n  String(r.json['Date'] || '').trim() === tomorrow\n);\n\nif (deployments.length === 0) return [];\n\nreturn deployments.map(r => ({\n  json: {\n    telegram_id: String(r.json['Telegram_ID'] || '').trim(),\n    guard_name:  r.json['Guard Name']  || 'Guard',\n    site:        r.json['Site']        || 'Unassigned',\n    shift_start: r.json['Shift Start'] || '08:00',\n    shift_end:   r.json['Shift End']   || '20:00',\n    date:        tomorrow\n  }\n}));"
+      },
+      "id": "deploy-filter-001",
+      "name": "Get Tomorrow Deployments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "=📋 *Tomorrow's Deployment*\n\n👤 *Guard:* {{ $json.guard_name }}\n📍 *Site:* {{ $json.site }}\n📅 *Date:* {{ $json.date }}\n⏰ *Shift:* {{ $json.shift_start }} – {{ $json.shift_end }}\n\nPlease arrive on time\\. Remember to share your live location when you reach your post to record attendance\\. 🛡️",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "deploy-notify-001",
+      "name": "Notify Guard",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [660, 0],
+      "credentials": {
+        "telegramApi": {
+          "id": "tU4R9SEuNlBNrZWs",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [{ "node": "Read Deployment Sheet", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Deployment Sheet": {
+      "main": [
+        [{ "node": "Get Tomorrow Deployments", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Tomorrow Deployments": {
+      "main": [
+        [{ "node": "Notify Guard", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "x9Bwssy4sHZpw2lY"
+  },
+  "tags": [
+    { "name": "deployment" },
+    { "name": "guard" }
+  ]
+}
