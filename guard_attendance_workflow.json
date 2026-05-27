@@ -95,12 +95,6 @@
               "name": "chat_id",
               "value": "={{ $json.message.chat.id }}",
               "type": "string"
-            },
-            {
-              "id": "field-008",
-              "name": "unix_timestamp",
-              "value": "={{ $json.message.date }}",
-              "type": "number"
             }
           ]
         },
@@ -125,30 +119,29 @@
           "value": "Guards",
           "mode": "name"
         },
-        "filtersUI": {
-          "values": [
-            {
-              "lookupColumn": "Telegram ID",
-              "lookupValue": "={{ $('Extract Attendance Data').item.json.telegram_id }}"
-            }
-          ]
-        },
-        "options": {
-          "returnAllMatches": false
-        }
+        "options": {}
       },
       "id": "a1b2c3d4-0006-0006-0006-000000000006",
-      "name": "Lookup Guard in Master Sheet",
+      "name": "Read All Guards from Master Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [860, 300],
-      "continueOnFail": true,
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
           "name": "Google Sheets OAuth2"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the Telegram ID of the guard who just messaged\nconst telegramId = String($('Extract Attendance Data').item.json.telegram_id);\n\n// $input.all() contains every row from the master Guards sheet\nconst rows = $input.all();\n\n// Find the row where Telegram ID matches (cast both to string to avoid number/text mismatch)\nconst match = rows.find(row => String(row.json['Telegram ID']) === telegramId);\n\n// Always return exactly 1 item — workflow never stops here\nreturn [{\n  json: {\n    assigned_site: match ? (match.json['Assigned Site'] || 'Unassigned') : 'Unassigned'\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0008-0008-0008-000000000008",
+      "name": "Find Assigned Site",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300]
     },
     {
       "parameters": {
@@ -199,7 +192,7 @@
             {
               "id": "merge-008",
               "name": "assigned_site",
-              "value": "={{ $json['Assigned Site'] || 'Unassigned' }}",
+              "value": "={{ $json.assigned_site }}",
               "type": "string"
             }
           ]
@@ -210,7 +203,7 @@
       "name": "Merge Attendance + Site",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1080, 300]
+      "position": [1300, 300]
     },
     {
       "parameters": {
@@ -259,7 +252,7 @@
       "name": "Log to Google Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [1300, 300],
+      "position": [1520, 300],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
@@ -279,7 +272,7 @@
       "name": "Send Confirmation to Guard",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1520, 300],
+      "position": [1740, 300],
       "credentials": {
         "telegramApi": {
           "id": "TELEGRAM_CREDENTIAL_ID",
@@ -315,14 +308,25 @@
       "main": [
         [
           {
-            "node": "Lookup Guard in Master Sheet",
+            "node": "Read All Guards from Master Sheet",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lookup Guard in Master Sheet": {
+    "Read All Guards from Master Sheet": {
+      "main": [
+        [
+          {
+            "node": "Find Assigned Site",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Assigned Site": {
       "main": [
         [
           {
@@ -370,5 +374,5 @@
     { "name": "telegram" }
   ],
   "triggerCount": 1,
-  "versionId": "2"
+  "versionId": "3"
 }
