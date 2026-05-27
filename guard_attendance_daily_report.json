@@ -1,0 +1,136 @@
+{
+  "name": "Guard Attendance - Daily Summary Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 15 * * *"
+            }
+          ]
+        }
+      },
+      "id": "sched-001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lVfttRACRs36fxUkQK-wLB9-bUhq6pPHWaW0_IlltzY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "read-master-001",
+      "name": "Read Master Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [220, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkooqHE06zipBeCm",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "read-attendance-001",
+      "name": "Read Attendance Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [440, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkooqHE06zipBeCm",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const today = $now.setZone('Asia/Singapore').format('dd/MM/yyyy');\n\n// All registered guards from master sheet\nconst masterRows = $('Read Master Sheet').all();\nconst allGuards = masterRows\n  .filter(r => r.json['Telegram ID'] && String(r.json['Telegram ID']).trim() !== '')\n  .map(r => ({\n    name: r.json['Name'] || 'Unknown',\n    site: r.json['Assigned Site'] || 'Unassigned',\n    telegramId: String(r.json['Telegram ID']).trim()\n  }));\n\n// Today's check-ins\nconst attendanceRows = $input.all();\nconst checkedInIds = attendanceRows\n  .filter(r => String(r.json['Date'] || '').trim() === today)\n  .map(r => String(r.json['Telegram_ID'] || '').trim());\n\n// Present vs absent\nconst present = allGuards.filter(g => checkedInIds.includes(g.telegramId));\nconst absent  = allGuards.filter(g => !checkedInIds.includes(g.telegramId));\n\nconst presentList = present.length > 0\n  ? present.map(g => `\\u2705 ${g.name} \\u2014 ${g.site}`).join('\\n')\n  : '_None_';\n\nconst absentList = absent.length > 0\n  ? absent.map(g => `\\u274c ${g.name} \\u2014 ${g.site}`).join('\\n')\n  : '_None_';\n\nreturn [{\n  json: {\n    date: today,\n    total: allGuards.length,\n    present_count: present.length,\n    absent_count: absent.length,\n    present_list: presentList,\n    absent_list: absentList\n  }\n}];"
+      },
+      "id": "gen-summary-001",
+      "name": "Generate Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_ADMIN_TELEGRAM_CHAT_ID",
+        "text": "=📊 *Daily Attendance Report*\n📅 *Date:* {{ $json.date }}\n━━━━━━━━━━━━━━\n👥 *Total Guards:* {{ $json.total }}\n✅ *Checked In:* {{ $json.present_count }}\n❌ *Absent:* {{ $json.absent_count }}\n━━━━━━━━━━━━━━\n*Checked In:*\n{{ $json.present_list }}\n\n*Absent:*\n{{ $json.absent_list }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "send-report-001",
+      "name": "Send Daily Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [880, 0],
+      "credentials": {
+        "telegramApi": {
+          "id": "tU4R9SEuNlBNrZWs",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [{ "node": "Read Master Sheet", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Master Sheet": {
+      "main": [
+        [{ "node": "Read Attendance Sheet", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Attendance Sheet": {
+      "main": [
+        [{ "node": "Generate Summary", "type": "main", "index": 0 }]
+      ]
+    },
+    "Generate Summary": {
+      "main": [
+        [{ "node": "Send Daily Report", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "x9Bwssy4sHZpw2lY"
+  },
+  "tags": [
+    { "name": "attendance" },
+    { "name": "report" }
+  ]
+}
