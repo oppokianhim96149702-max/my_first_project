@@ -114,10 +114,110 @@
     },
     {
       "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_MASTER_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Telegram ID",
+              "lookupValue": "={{ $('Extract Attendance Data').item.json.telegram_id }}"
+            }
+          ]
+        },
+        "options": {
+          "returnAllMatches": false
+        }
+      },
+      "id": "a1b2c3d4-0006-0006-0006-000000000006",
+      "name": "Lookup Guard in Master Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [860, 300],
+      "continueOnFail": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "merge-001",
+              "name": "guard_name",
+              "value": "={{ $('Extract Attendance Data').item.json.guard_name }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-002",
+              "name": "telegram_username",
+              "value": "={{ $('Extract Attendance Data').item.json.telegram_username }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-003",
+              "name": "telegram_id",
+              "value": "={{ $('Extract Attendance Data').item.json.telegram_id }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-004",
+              "name": "message_text",
+              "value": "={{ $('Extract Attendance Data').item.json.message_text }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-005",
+              "name": "date",
+              "value": "={{ $('Extract Attendance Data').item.json.date }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-006",
+              "name": "time",
+              "value": "={{ $('Extract Attendance Data').item.json.time }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-007",
+              "name": "chat_id",
+              "value": "={{ $('Extract Attendance Data').item.json.chat_id }}",
+              "type": "string"
+            },
+            {
+              "id": "merge-008",
+              "name": "assigned_site",
+              "value": "={{ $json['Assigned Site'] || 'Unassigned' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-0007-0007-000000000007",
+      "name": "Merge Attendance + Site",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "YOUR_GOOGLE_SHEET_ID_HERE",
+          "value": "YOUR_ATTENDANCE_SHEET_ID_HERE",
           "mode": "id"
         },
         "sheetName": {
@@ -131,6 +231,7 @@
             "Date": "={{ $json.date }}",
             "Time": "={{ $json.time }}",
             "Guard Name": "={{ $json.guard_name }}",
+            "Assigned Site": "={{ $json.assigned_site }}",
             "Telegram Username": "={{ $json.telegram_username }}",
             "Telegram ID": "={{ $json.telegram_id }}",
             "Message": "={{ $json.message_text }}",
@@ -142,6 +243,7 @@
             { "id": "Date", "displayName": "Date", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "Time", "displayName": "Time", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "Guard Name", "displayName": "Guard Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Assigned Site", "displayName": "Assigned Site", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "Telegram Username", "displayName": "Telegram Username", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "Telegram ID", "displayName": "Telegram ID", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
             { "id": "Message", "displayName": "Message", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
@@ -157,7 +259,7 @@
       "name": "Log to Google Sheets",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
-      "position": [860, 300],
+      "position": [1300, 300],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "GOOGLE_SHEETS_CREDENTIAL_ID",
@@ -167,8 +269,8 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $('Extract Attendance Data').item.json.chat_id }}",
-        "text": "=✅ *Attendance Recorded!*\n\n👤 *Guard:* {{ $('Extract Attendance Data').item.json.guard_name }}\n📅 *Date:* {{ $('Extract Attendance Data').item.json.date }}\n⏰ *Time:* {{ $('Extract Attendance Data').item.json.time }}\n📝 *Message:* {{ $('Extract Attendance Data').item.json.message_text }}\n\nHave a safe shift! 🛡️",
+        "chatId": "={{ $('Merge Attendance + Site').item.json.chat_id }}",
+        "text": "=✅ *Attendance Recorded!*\n\n👤 *Guard:* {{ $('Merge Attendance + Site').item.json.guard_name }}\n📍 *Site:* {{ $('Merge Attendance + Site').item.json.assigned_site }}\n📅 *Date:* {{ $('Merge Attendance + Site').item.json.date }}\n⏰ *Time:* {{ $('Merge Attendance + Site').item.json.time }}\n📝 *Message:* {{ $('Merge Attendance + Site').item.json.message_text }}\n\nHave a safe shift! 🛡️",
         "additionalFields": {
           "parse_mode": "Markdown"
         }
@@ -177,7 +279,7 @@
       "name": "Send Confirmation to Guard",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1080, 300],
+      "position": [1520, 300],
       "credentials": {
         "telegramApi": {
           "id": "TELEGRAM_CREDENTIAL_ID",
@@ -210,6 +312,28 @@
       ]
     },
     "Extract Attendance Data": {
+      "main": [
+        [
+          {
+            "node": "Lookup Guard in Master Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Guard in Master Sheet": {
+      "main": [
+        [
+          {
+            "node": "Merge Attendance + Site",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Attendance + Site": {
       "main": [
         [
           {
@@ -246,5 +370,5 @@
     { "name": "telegram" }
   ],
   "triggerCount": 1,
-  "versionId": "1"
+  "versionId": "2"
 }
