@@ -1,0 +1,136 @@
+{
+  "name": "Guard Attendance - 8AM Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 * * *"
+            }
+          ]
+        }
+      },
+      "id": "remind-sched-001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1lVfttRACRs36fxUkQK-wLB9-bUhq6pPHWaW0_IlltzY",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "remind-master-001",
+      "name": "Read Master Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [220, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkooqHE06zipBeCm",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "remind-attendance-001",
+      "name": "Read Attendance Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [440, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkooqHE06zipBeCm",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const today = $now.setZone('Asia/Singapore').format('dd/MM/yyyy');\n\n// All registered guards\nconst masterRows = $('Read Master Sheet').all();\nconst allGuards = masterRows\n  .filter(r => r.json['Telegram ID'] && String(r.json['Telegram ID']).trim() !== '')\n  .map(r => ({\n    name: r.json['Name'] || 'Unknown',\n    site: r.json['Assigned Site'] || 'Unassigned',\n    telegramId: String(r.json['Telegram ID']).trim()\n  }));\n\n// Guards who already checked in today\nconst attendanceRows = $input.all();\nconst checkedInIds = attendanceRows\n  .filter(r => String(r.json['Date'] || '').trim() === today)\n  .map(r => String(r.json['Telegram_ID'] || '').trim());\n\n// Absent guards only\nconst absentGuards = allGuards.filter(g => !checkedInIds.includes(g.telegramId));\n\n// Return 0 items if everyone checked in — Telegram node won't run\nif (absentGuards.length === 0) {\n  return [];\n}\n\n// One item per absent guard so Telegram node runs once per guard\nreturn absentGuards.map(g => ({\n  json: {\n    telegram_id: g.telegramId,\n    guard_name: g.name,\n    site: g.site\n  }\n}));"
+      },
+      "id": "remind-find-absent-001",
+      "name": "Find Absent Guards",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "=⏰ *Check-In Reminder*\n\n👤 *Guard:* {{ $json.guard_name }}\n📍 *Site:* {{ $json.site }}\n\nYou have not checked in yet today\\. Please go to your assigned post and share your *live location* with this bot to record your attendance\\.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "remind-send-001",
+      "name": "Send Reminder to Guard",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [880, 0],
+      "credentials": {
+        "telegramApi": {
+          "id": "tU4R9SEuNlBNrZWs",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [{ "node": "Read Master Sheet", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Master Sheet": {
+      "main": [
+        [{ "node": "Read Attendance Sheet", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Attendance Sheet": {
+      "main": [
+        [{ "node": "Find Absent Guards", "type": "main", "index": 0 }]
+      ]
+    },
+    "Find Absent Guards": {
+      "main": [
+        [{ "node": "Send Reminder to Guard", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "x9Bwssy4sHZpw2lY"
+  },
+  "tags": [
+    { "name": "attendance" },
+    { "name": "reminder" }
+  ]
+}
