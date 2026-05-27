@@ -1,0 +1,439 @@
+{
+  "name": "Guard Attendance - Check In (Multi) + Geofence",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "7102b6a5-0571-4a94-bde6-085fdf8d5c50",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-1504, 192],
+      "webhookId": "guard-attendance-webhook",
+      "credentials": {
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "loc-001",
+              "leftValue": "={{ !!$json.message.location }}",
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "053d3932-f778-4046-a14d-55ea6e12d29e",
+      "name": "Has Location?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [-1280, 192]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "field-001", "name": "guard_name", "value": "={{ $json.message.from.first_name + ($json.message.from.last_name ? ' ' + $json.message.from.last_name : '') }}", "type": "string" },
+            { "id": "field-002", "name": "telegram_username", "value": "={{ '@' + ($json.message.from.username || 'no_username') }}", "type": "string" },
+            { "id": "field-003", "name": "telegram_id", "value": "={{ String($json.message.from.id) }}", "type": "string" },
+            { "id": "field-004", "name": "message_text", "value": "={{ $json.message.text || 'Location Check-in' }}", "type": "string" },
+            { "id": "field-005", "name": "date", "value": "={{ $now.setZone('Asia/Singapore').format('dd/MM/yyyy') }}", "type": "string" },
+            { "id": "field-006", "name": "time", "value": "={{ $now.setZone('Asia/Singapore').format('HH:mm:ss') }}", "type": "string" },
+            { "id": "field-007", "name": "chat_id", "value": "={{ $json.message.chat.id }}", "type": "string" },
+            { "id": "field-009", "name": "guard_lat", "value": "={{ $json.message.location.latitude }}", "type": "number" },
+            { "id": "field-010", "name": "guard_lng", "value": "={{ $json.message.location.longitude }}", "type": "number" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7290b1f9-3d56-4bda-8e58-cf1877cea90b",
+      "name": "Extract Attendance Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1056, 192]
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "value": "1lVfttRACRs36fxUkQK-wLB9-bUhq6pPHWaW0_IlltzY", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
+        "options": {}
+      },
+      "id": "c06200b2-f15e-4faf-b639-9033377ff0ef",
+      "name": "Read All Guards from Master Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [-832, 192],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const telegramId = String($('Extract Attendance Data').item.json.telegram_id);\nconst rows = $input.all();\nconst match = rows.find(row => String(row.json['Telegram ID']) === telegramId);\n\nreturn [{\n  json: {\n    found: !!match,\n    assigned_site: match ? (match.json['Assigned Site'] || 'Unassigned') : 'Unassigned',\n    site_lat:  match ? (parseFloat(match.json['Site Lat'])  || null) : null,\n    site_lng:  match ? (parseFloat(match.json['Site Lng'])  || null) : null\n  }\n}];"
+      },
+      "id": "ca4652aa-4cb2-4e85-ac99-17dec5b8e461",
+      "name": "Find Guard",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-608, 192]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 1 },
+          "conditions": [
+            {
+              "id": "if-found-001",
+              "leftValue": "={{ $json.found }}",
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "213601d6-5413-41e6-aadd-9147f57c0415",
+      "name": "Guard Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-384, 192]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "merge-001", "name": "guard_name",       "value": "={{ $('Extract Attendance Data').item.json.guard_name }}", "type": "string" },
+            { "id": "merge-002", "name": "telegram_username","value": "={{ $('Extract Attendance Data').item.json.telegram_username }}", "type": "string" },
+            { "id": "merge-003", "name": "telegram_id",      "value": "={{ String($('Extract Attendance Data').item.json.telegram_id) }}", "type": "string" },
+            { "id": "merge-004", "name": "message_text",     "value": "={{ $('Extract Attendance Data').item.json.message_text }}", "type": "string" },
+            { "id": "merge-005", "name": "date",             "value": "={{ $('Extract Attendance Data').item.json.date }}", "type": "string" },
+            { "id": "merge-006", "name": "time",             "value": "={{ $('Extract Attendance Data').item.json.time }}", "type": "string" },
+            { "id": "merge-007", "name": "chat_id",          "value": "={{ $('Extract Attendance Data').item.json.chat_id }}", "type": "string" },
+            { "id": "merge-008", "name": "assigned_site",    "value": "={{ $json.assigned_site }}", "type": "string" },
+            { "id": "merge-009", "name": "guard_lat",        "value": "={{ $('Extract Attendance Data').item.json.guard_lat }}", "type": "number" },
+            { "id": "merge-010", "name": "guard_lng",        "value": "={{ $('Extract Attendance Data').item.json.guard_lng }}", "type": "number" },
+            { "id": "merge-011", "name": "site_lat",         "value": "={{ $json.site_lat }}", "type": "number" },
+            { "id": "merge-012", "name": "site_lng",         "value": "={{ $json.site_lng }}", "type": "number" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0e4dc188-590f-418d-a00f-26c96a37360c",
+      "name": "Merge Attendance + Site",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-160, 32]
+    },
+    {
+      "parameters": {
+        "jsCode": "const guardLat = Number($('Merge Attendance + Site').item.json.guard_lat);\nconst guardLng = Number($('Merge Attendance + Site').item.json.guard_lng);\nconst siteLat  = Number($('Merge Attendance + Site').item.json.site_lat);\nconst siteLng  = Number($('Merge Attendance + Site').item.json.site_lng);\n\n// No site coordinates in master sheet — skip geofence, allow check-in\nif (!siteLat || !siteLng) {\n  return [{ json: { within_geofence: true, distance_meters: 0 } }];\n}\n\nconst R = 6371000; // Earth radius in metres\nconst dLat = (siteLat - guardLat) * Math.PI / 180;\nconst dLng = (siteLng - guardLng) * Math.PI / 180;\nconst a = Math.sin(dLat / 2) ** 2 +\n          Math.cos(guardLat * Math.PI / 180) *\n          Math.cos(siteLat  * Math.PI / 180) *\n          Math.sin(dLng / 2) ** 2;\nconst distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));\n\nreturn [{ json: {\n  within_geofence: distance <= 100,\n  distance_meters: Math.round(distance)\n} }];"
+      },
+      "id": "geo-001-0001-0001-0001-000000000001",
+      "name": "Check Geofence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [64, 32]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "geo-check-001",
+              "leftValue": "={{ $json.within_geofence }}",
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "geo-002-0002-0002-0002-000000000002",
+      "name": "Within Geofence?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [288, 32]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Merge Attendance + Site').item.json.chat_id }}",
+        "text": "=❌ *Check-in Failed — Not at Your Site*\n\n👤 *Guard:* {{ $('Merge Attendance + Site').item.json.guard_name }}\n📍 *Assigned Site:* {{ $('Merge Attendance + Site').item.json.assigned_site }}\n📏 *Your Distance:* {{ $json.distance_meters }}m from site\n✅ *Required:* within 100m\n\nPlease walk to your assigned post and share your location again\\.",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "geo-003-0003-0003-0003-000000000003",
+      "name": "Send Out of Range",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [512, -128],
+      "credentials": {
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
+        "options": {}
+      },
+      "id": "cc000001-0001-0001-0001-000000000001",
+      "name": "Read Attendance Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [512, 32],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const telegramId = String($('Merge Attendance + Site').item.json.telegram_id);\nconst today = $('Merge Attendance + Site').item.json.date;\nconst rows = $input.all();\n\nif (rows.length === 0) {\n  return [{ json: { duplicate: false } }];\n}\n\nconst duplicate = rows.some(row =>\n  String(row.json['Telegram_ID'] || '') === telegramId &&\n  String(row.json['Date'] || '') === today\n);\n\nreturn [{ json: { duplicate } }];"
+      },
+      "id": "cc000002-0002-0002-0002-000000000002",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [736, 32]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "dup-check-001",
+              "leftValue": "={{ $json.duplicate }}",
+              "operator": { "type": "boolean", "operation": "true" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cc000003-0003-0003-0003-000000000003",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 32]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Merge Attendance + Site').item.json.chat_id }}",
+        "text": "=⚠️ *Already Checked In Today*\n\n👤 *Guard:* {{ $('Merge Attendance + Site').item.json.guard_name }}\n📍 *Site:* {{ $('Merge Attendance + Site').item.json.assigned_site }}\n📅 *Date:* {{ $('Merge Attendance + Site').item.json.date }}\n\nYour attendance for today has already been recorded\\.",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "cc000004-0004-0004-0004-000000000004",
+      "name": "Send Already Checked In",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1184, -128],
+      "credentials": {
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date":         "={{ $('Merge Attendance + Site').item.json.date }}",
+            "Name":         "={{ $('Merge Attendance + Site').item.json.guard_name }}",
+            "Telegram_ID":  "={{ String($('Merge Attendance + Site').item.json.telegram_id) }}",
+            "Assigned Sites":"={{ $('Merge Attendance + Site').item.json.assigned_site }}",
+            "Distance (m)": "={{ $('Check Geofence').item.json.distance_meters }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Date",          "displayName": "Date",          "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Name",          "displayName": "Name",          "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Telegram_ID",   "displayName": "Telegram_ID",   "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Assigned Sites","displayName": "Assigned Sites", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Distance (m)",  "displayName": "Distance (m)",  "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "ee9cdcdd-8d29-4438-8f97-d6870431cabe",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1184, 32],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Merge Attendance + Site').item.json.chat_id }}",
+        "text": "=✅ *Attendance Recorded!*\n\n👤 *Guard:* {{ $('Merge Attendance + Site').item.json.guard_name }}\n📍 *Site:* {{ $('Merge Attendance + Site').item.json.assigned_site }}\n📏 *Distance:* {{ $('Check Geofence').item.json.distance_meters }}m from site\n📅 *Date:* {{ $('Merge Attendance + Site').item.json.date }}\n⏰ *Time:* {{ $('Merge Attendance + Site').item.json.time }}\n\nHave a safe shift! 🛡️",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "e08ce355-350a-4c78-862e-0f093a8a1fe6",
+      "name": "Send Confirmation to Guard",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1408, 32],
+      "webhookId": "c985da9c-15b1-4add-8c80-f35d154ab692",
+      "credentials": {
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "fallback-001", "name": "guard_name",       "value": "={{ $('Extract Attendance Data').item.json.guard_name }}", "type": "string" },
+            { "id": "fallback-002", "name": "telegram_username","value": "={{ $('Extract Attendance Data').item.json.telegram_username }}", "type": "string" },
+            { "id": "fallback-003", "name": "telegram_id",      "value": "={{ String($('Extract Attendance Data').item.json.telegram_id) }}", "type": "string" },
+            { "id": "fallback-004", "name": "message_text",     "value": "={{ $('Extract Attendance Data').item.json.message_text }}", "type": "string" },
+            { "id": "fallback-005", "name": "date",             "value": "={{ $('Extract Attendance Data').item.json.date }}", "type": "string" },
+            { "id": "fallback-006", "name": "time",             "value": "={{ $('Extract Attendance Data').item.json.time }}", "type": "string" },
+            { "id": "fallback-007", "name": "chat_id",          "value": "={{ $('Extract Attendance Data').item.json.chat_id }}", "type": "string" },
+            { "id": "fallback-008", "name": "assigned_site",    "value": "Unassigned", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9edc9b0c-26ee-4770-a59a-efaa23f9cc06",
+      "name": "Set Fallback Site",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-160, 352]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date":          "={{ $json.date }}",
+            "Name":          "={{ $json.guard_name }}",
+            "Telegram_ID":   "={{ String($json.telegram_id) }}",
+            "Assigned Sites":"Unassigned",
+            "Distance (m)":  "N/A"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Date",          "displayName": "Date",          "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Name",          "displayName": "Name",          "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Telegram_ID",   "displayName": "Telegram_ID",   "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Assigned Sites","displayName": "Assigned Sites", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Distance (m)",  "displayName": "Distance (m)",  "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "b7135346-c7a2-4a9c-8b66-f2449cf1de38",
+      "name": "Log Unregistered Guard",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [64, 352],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Set Fallback Site').item.json.chat_id }}",
+        "text": "=⚠️ *Attendance Recorded \\(Unregistered\\)*\n\n👤 *Name:* {{ $('Set Fallback Site').item.json.guard_name }}\n📍 *Site:* Unassigned\n📅 *Date:* {{ $('Set Fallback Site').item.json.date }}\n⏰ *Time:* {{ $('Set Fallback Site').item.json.time }}\n\nYou are not registered in the master list\\. Please contact your supervisor to register your Telegram ID\\.",
+        "additionalFields": { "parse_mode": "MarkdownV2" }
+      },
+      "id": "3ebf288b-b51c-4fc5-8a7a-aad2fe2c5bea",
+      "name": "Send Not Registered Notice",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [288, 352],
+      "webhookId": "0d66dcf1-cc7f-4fcc-9fbe-46213a83d3b4",
+      "credentials": {
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Has Location?", "type": "main", "index": 0 }]]
+    },
+    "Has Location?": {
+      "main": [[{ "node": "Extract Attendance Data", "type": "main", "index": 0 }]]
+    },
+    "Extract Attendance Data": {
+      "main": [[{ "node": "Read All Guards from Master Sheet", "type": "main", "index": 0 }]]
+    },
+    "Read All Guards from Master Sheet": {
+      "main": [[{ "node": "Find Guard", "type": "main", "index": 0 }]]
+    },
+    "Find Guard": {
+      "main": [[{ "node": "Guard Found?", "type": "main", "index": 0 }]]
+    },
+    "Guard Found?": {
+      "main": [
+        [{ "node": "Merge Attendance + Site", "type": "main", "index": 0 }],
+        [{ "node": "Set Fallback Site", "type": "main", "index": 0 }]
+      ]
+    },
+    "Merge Attendance + Site": {
+      "main": [[{ "node": "Check Geofence", "type": "main", "index": 0 }]]
+    },
+    "Check Geofence": {
+      "main": [[{ "node": "Within Geofence?", "type": "main", "index": 0 }]]
+    },
+    "Within Geofence?": {
+      "main": [
+        [{ "node": "Read Attendance Sheet", "type": "main", "index": 0 }],
+        [{ "node": "Send Out of Range", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Attendance Sheet": {
+      "main": [[{ "node": "Check Duplicate", "type": "main", "index": 0 }]]
+    },
+    "Check Duplicate": {
+      "main": [[{ "node": "Is Duplicate?", "type": "main", "index": 0 }]]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [{ "node": "Send Already Checked In", "type": "main", "index": 0 }],
+        [{ "node": "Log to Google Sheets", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [[{ "node": "Send Confirmation to Guard", "type": "main", "index": 0 }]]
+    },
+    "Set Fallback Site": {
+      "main": [[{ "node": "Log Unregistered Guard", "type": "main", "index": 0 }]]
+    },
+    "Log Unregistered Guard": {
+      "main": [[{ "node": "Send Not Registered Notice", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "errorWorkflow": "YOUR_ERROR_WORKFLOW_ID"
+  },
+  "versionId": "a3e78a5d-5f7e-465f-a4d2-54d9119d9591",
+  "meta": {
+    "instanceId": "edac016de2d10c4a0c3e12f0f0f96a0f36a3b4ae225409676e0eb05f8eb41252"
+  },
+  "id": "tUmL5RcTTA8LuIJ3",
+  "tags": []
+}
