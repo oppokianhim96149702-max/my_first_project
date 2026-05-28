@@ -92,10 +92,43 @@ function stripHtml(html) {
   return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ");
 }
 
+// -------------------------------------------------------------------
+// Clean column F: remove all text BEFORE "bbb" in every data row
+// -------------------------------------------------------------------
+function cleanColumnFBeforeBbb() {
+  var ss      = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet   = ss.getSheetByName("DBS Alerts") || ss.getActiveSheet();
+  var lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    notify("No data rows found in the sheet.");
+    return;
+  }
+
+  var range   = sheet.getRange(2, 6, lastRow - 1, 1); // column F, rows 2 to last
+  var values  = range.getValues();
+  var keyword = "bbb";
+  var count   = 0;
+
+  var updated = values.map(function (row) {
+    var cell = row[0] !== null && row[0] !== undefined ? String(row[0]) : "";
+    var idx  = cell.indexOf(keyword);
+    if (idx > 0) {
+      count++;
+      return [cell.substring(idx)];
+    }
+    return [cell];
+  });
+
+  range.setValues(updated);
+  notify('Done! Removed text before "' + keyword + '" in ' + count + ' cell(s) in column F.');
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("DBS Tools")
-    .addItem("Extract Alert Amounts", "extractDbsAlerts")
+    .addItem("Extract Alert Amounts",        "extractDbsAlerts")
+    .addItem("Clean Col F (remove pre-bbb)", "cleanColumnFBeforeBbb")
     .addToUi();
 }
 
