@@ -1,5 +1,5 @@
 var SENDER  = "ibanking.alert@dbs.com";
-var DAYS    = 30;   // reduce if still timing out
+var DAYS    = 2;    // only last 2 days
 var MAX_TH  = 100;  // reduce if still timing out
 
 function extractDbsAlerts() {
