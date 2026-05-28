@@ -1,0 +1,88 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "filters": {
+          "sender": "iBanking.alert@dbs.com",
+          "readStatus": "unread"
+        },
+        "options": {
+          "dataPropertyAttachmentsBinaryData": false
+        }
+      },
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [-800, 272],
+      "id": "gmail-trigger-001",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst body = item.text || item.snippet || item.body || '';\nconst subject = item.subject || '';\n\n// Extract amount — matches patterns like:\n// SGD 123.45  /  S$123.45  /  SGD123.45  /  $123.45\nconst amountMatch = body.match(/(?:SGD|S\\$|\\$)[\\s]?([\\d,]+\\.?\\d{0,2})/i) ||\n                    subject.match(/(?:SGD|S\\$|\\$)[\\s]?([\\d,]+\\.?\\d{0,2})/i);\nconst amount = amountMatch ? amountMatch[1].replace(/,/g, '') : 'N/A';\n\n// Extract date — matches DD/MM/YYYY, DD MMM YYYY, DD-MM-YYYY, YYYY-MM-DD\nconst dateMatch = body.match(/(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})/) ||\n                  body.match(/(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\w*\\s+\\d{4})/i) ||\n                  body.match(/(\\d{4}-\\d{2}-\\d{2})/);\nconst rawDate = dateMatch ? dateMatch[1] : '';\n\n// Normalise to DD/MM/YYYY\nlet txDate = rawDate;\nif (/\\d{4}-\\d{2}-\\d{2}/.test(rawDate)) {\n  const [y, m, d] = rawDate.split('-');\n  txDate = d + '/' + m + '/' + y;\n}\n\n// Extract last 4 digits of account/card if present\nconst acctMatch = body.match(/account\\s+(?:ending\\s+)?(?:no[\\.:]*\\s+)?[Xx*]+(\\d{4})/i) ||\n                  body.match(/\\*+(\\d{4})/i);\nconst acctLast4 = acctMatch ? acctMatch[1] : 'N/A';\n\n// Detect transaction type\nlet txType = 'Unknown';\nif (/debit|debited|purchase|payment|paid/i.test(body)) txType = 'Debit';\nelse if (/credit|credited|received|deposit/i.test(body)) txType = 'Credit';\n\n// Capture received timestamp (Singapore time)\nconst now = new Date();\nconst sg = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));\nconst receivedAt = sg.toLocaleString('en-SG', { timeZone: 'Asia/Singapore' });\n\nreturn [{ json: {\n  email_subject: subject,\n  email_date: item.date || '',\n  received_at: receivedAt,\n  tx_date: txDate || receivedAt.split(',')[0],\n  amount: amount,\n  tx_type: txType,\n  acct_last4: acctLast4,\n  email_body_preview: body.substring(0, 300)\n} }];"
+      },
+      "name": "Extract Amount & Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-576, 272],
+      "id": "extract-dbs-001"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "DBS Transactions",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Received At": "={{ $json.received_at }}",
+            "Transaction Date": "={{ $json.tx_date }}",
+            "Amount (SGD)": "={{ $json.amount }}",
+            "Type": "={{ $json.tx_type }}",
+            "Account Last 4": "={{ $json.acct_last4 }}",
+            "Email Subject": "={{ $json.email_subject }}",
+            "Preview": "={{ $json.email_body_preview }}"
+          }
+        },
+        "options": {}
+      },
+      "name": "Save to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [-352, 272],
+      "id": "save-dbs-sheet-001",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "fkooqHE06zipBeCm",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [[{ "node": "Extract Amount & Date", "type": "main", "index": 0 }]]
+    },
+    "Extract Amount & Date": {
+      "main": [[{ "node": "Save to Google Sheet", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "edac016de2d10c4a0c3e12f0f0f96a0f36a3b4ae225409676e0eb05f8eb41252"
+  }
+}

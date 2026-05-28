@@ -12,15 +12,12 @@
       "id": "2a167f27-f9c5-4ecd-9840-4e67ca26d1fe",
       "webhookId": "1ab04873-d843-47d4-bc97-f1ab893da332",
       "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
+        "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nlet type = 'unknown';\nlet chatId = '';\nlet telegramId = '';\nlet callbackData = '';\nlet userName = '';\n\nif (item.callback_query) {\n  type = 'callback_query';\n  callbackData = item.callback_query.data || '';\n  chatId = String(item.callback_query.message.chat.id);\n  telegramId = String(item.callback_query.from.id);\n  userName = (item.callback_query.from.first_name || '') + ' ' + (item.callback_query.from.last_name || '');\n} else if (item.message) {\n  type = 'message';\n  chatId = String(item.message.chat.id);\n  telegramId = String(item.message.from.id);\n  userName = (item.message.from.first_name || '') + ' ' + (item.message.from.last_name || '');\n  callbackData = item.message.text || '';\n}\n\nreturn [{ json: { ...item, detected_type: type, chat_id: chatId, telegram_id: telegramId, callback_data: callbackData, user_name: userName.trim() } }];"
+        "jsCode": "const item = $input.first().json;\nlet type = 'unknown', chatId = '', telegramId = '', callbackData = '', userName = '';\nif (item.callback_query) {\n  type = 'callback_query';\n  callbackData = item.callback_query.data || '';\n  chatId = String(item.callback_query.message.chat.id);\n  telegramId = String(item.callback_query.from.id);\n  userName = ((item.callback_query.from.first_name || '') + ' ' + (item.callback_query.from.last_name || '')).trim();\n} else if (item.message) {\n  type = 'message';\n  chatId = String(item.message.chat.id);\n  telegramId = String(item.message.from.id);\n  userName = ((item.message.from.first_name || '') + ' ' + (item.message.from.last_name || '')).trim();\n  callbackData = item.message.text || '';\n}\nreturn [{ json: { ...item, detected_type: type, chat_id: chatId, telegram_id: telegramId, callback_data: callbackData, user_name: userName } }];"
       },
       "name": "Detect Type",
       "type": "n8n-nodes-base.code",
@@ -31,12 +28,7 @@
     {
       "parameters": {
         "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json.detected_type }}",
-              "value2": "callback_query"
-            }
-          ]
+          "string": [{ "value1": "={{ $json.detected_type }}", "value2": "callback_query" }]
         }
       },
       "name": "Is Callback?",
@@ -48,61 +40,9 @@
     {
       "parameters": {
         "operation": "getRows",
-        "documentId": {
-          "__rl": true,
-          "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Guards",
-          "mode": "name"
-        },
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "Telegram_ID",
-              "condition": "=",
-              "keyValue": "={{ $json.telegram_id }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "name": "Find Guard (Message)",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4,
-      "position": [-576, 368],
-      "id": "1a8b2b18-c149-47e6-8604-722559ca3a78",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "fkooqHE06zipBeCm",
-          "name": "Google Sheets OAuth2 API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "getRows",
-        "documentId": {
-          "__rl": true,
-          "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Guards",
-          "mode": "name"
-        },
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "Telegram_ID",
-              "condition": "=",
-              "keyValue": "={{ $json.telegram_id }}"
-            }
-          ]
-        },
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
+        "filters": { "conditions": [{ "keyName": "Telegram_ID", "condition": "=", "keyValue": "={{ $json.telegram_id }}" }] },
         "options": {}
       },
       "name": "Find Guard (Callback)",
@@ -110,40 +50,26 @@
       "typeVersion": 4,
       "position": [-576, 176],
       "id": "7a0f8b40-70bf-4067-995c-2f7ad4c7c91f",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "fkooqHE06zipBeCm",
-          "name": "Google Sheets OAuth2 API"
-        }
-      }
+      "credentials": { "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" } }
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json['Staff ID'] }}",
-              "operation": "isNotEmpty"
-            }
-          ]
-        }
+        "operation": "getRows",
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Guards", "mode": "name" },
+        "filters": { "conditions": [{ "keyName": "Telegram_ID", "condition": "=", "keyValue": "={{ $json.telegram_id }}" }] },
+        "options": {}
       },
-      "name": "Guard Found? (Message)",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [-384, 368],
-      "id": "6ad4f19c-30ea-4ef8-ac63-db3b1f3e0f9d"
+      "name": "Find Guard (Message)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [-576, 368],
+      "id": "1a8b2b18-c149-47e6-8604-722559ca3a78",
+      "credentials": { "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" } }
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json['Staff ID'] }}",
-              "operation": "isNotEmpty"
-            }
-          ]
-        }
+        "conditions": { "string": [{ "value1": "={{ $json['Staff ID'] }}", "operation": "isNotEmpty" }] }
       },
       "name": "Guard Found? (Callback)",
       "type": "n8n-nodes-base.if",
@@ -153,18 +79,54 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst now = new Date();\nconst sg = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));\nconst h = sg.getHours();\nconst shift = (h >= 7 && h < 19) ? 'Day Shift (7AM-7PM)' : 'Night Shift (7PM-7AM)';\nconst isLate = (shift.includes('Day') && h >= 8) || (shift.includes('Night') && (h >= 20 || h < 7));\nconst sgTime = sg.toLocaleString('en-SG', { timeZone: 'Asia/Singapore' });\nconst chatId = $('Detect Type').item.json.chat_id;\n\n// Return reply_markup as a plain OBJECT (not JSON string).\n// The Telegram node expression will stringify it with JSON.stringify().\nconst reply_markup = {\n  inline_keyboard: [[\n    { text: '\\u2705 Check In', callback_data: 'action_checkin' },\n    { text: '\\uD83D\\uDEAA Check Out', callback_data: 'action_checkout' }\n  ]]\n};\n\nreturn [{ json: { ...item, chat_id: chatId, current_shift: shift, is_late: isLate, sg_time: sgTime, reply_markup } }];"
+        "conditions": { "string": [{ "value1": "={{ $json['Staff ID'] }}", "operation": "isNotEmpty" }] }
+      },
+      "name": "Guard Found? (Message)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [-384, 368],
+      "id": "6ad4f19c-30ea-4ef8-ac63-db3b1f3e0f9d"
+    },
+    {
+      "parameters": { "mode": "mergeByIndex" },
+      "name": "Merge (Callback)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [-176, 176],
+      "id": "merge-callback-001"
+    },
+    {
+      "parameters": { "mode": "mergeByIndex" },
+      "name": "Merge (Message)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [-176, 368],
+      "id": "merge-message-001"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n// chat_id and callback_data now available directly from merged data\nconst data = item.callback_data || '';\nconst chatId = item.chat_id || String(item['Telegram_ID'] || '');\n\nif (data === 'action_history') {\n  return [{ json: { ...item, chat_id: chatId, route: 'history' } }];\n}\n\nif (!data.startsWith('action_') && !data.startsWith('checkin_') && !data.startsWith('checkout_')) {\n  return [{ json: { ...item, chat_id: chatId, route: 'unknown' } }];\n}\n\nconst now = new Date();\nconst sg = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));\nconst h = sg.getHours(), min = sg.getMinutes();\nconst shift = (h >= 7 && h < 19) ? 'Day Shift' : 'Night Shift';\n\nlet lateMin = 0;\nif (h >= 7 && h < 19) {\n  if (h > 7 || (h === 7 && min > 0)) lateMin = (h - 7) * 60 + min;\n} else {\n  if (h >= 19) lateMin = (h - 19) * 60 + min;\n  else if (h < 7) lateMin = (h + 5) * 60 + min;\n}\n\nconst isLate = lateMin > 0;\nconst status = isLate ? 'Late (' + lateMin + ' min)' : 'On Time';\nconst sgTime = sg.toLocaleString('en-SG', { timeZone: 'Asia/Singapore' });\nconst timeStr = String(h).padStart(2,'0') + ':' + String(min).padStart(2,'0');\nconst days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];\nconst dd = String(sg.getDate()).padStart(2,'0');\nconst mm = String(sg.getMonth()+1).padStart(2,'0');\nconst sgDate = dd+'/'+mm+'/'+sg.getFullYear()+' ('+days[sg.getDay()]+')';\n\nlet route = '', action = '', site = '', reply_markup = null;\n\nif (data === 'action_checkin') {\n  route = 'show_sites'; action = 'Check In';\n  const sites = (item['Assigned Sites'] || 'S01').split(',').map(s => s.trim());\n  reply_markup = { inline_keyboard: sites.map(s => [{ text: '\\uD83D\\uDCCD ' + s, callback_data: 'checkin_' + s }]) };\n} else if (data === 'action_checkout') {\n  route = 'show_sites'; action = 'Check Out';\n  const sites = (item['Assigned Sites'] || 'S01').split(',').map(s => s.trim());\n  reply_markup = { inline_keyboard: sites.map(s => [{ text: '\\uD83D\\uDCCD ' + s, callback_data: 'checkout_' + s }]) };\n} else if (data.startsWith('checkin_')) {\n  route = 'log'; action = 'Check In'; site = data.replace('checkin_', '');\n} else if (data.startsWith('checkout_')) {\n  route = 'log'; action = 'Check Out'; site = data.replace('checkout_', '');\n}\n\nreturn [{ json: { ...item, chat_id: chatId, route, action, site, current_shift: shift, is_late: isLate, late_min: lateMin, status, sg_time: sgTime, sg_date: sgDate, sg_time_short: timeStr, reply_markup } }];"
+      },
+      "name": "Process Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [32, 176],
+      "id": "ca311be8-8c6f-4857-adcd-4c58c9dc98df"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst now = new Date();\nconst sg = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));\nconst h = sg.getHours(), min = sg.getMinutes();\nconst shift = (h >= 7 && h < 19) ? 'Day Shift (7AM-7PM)' : 'Night Shift (7PM-7AM)';\n\nlet lateMin = 0;\nif (h >= 7 && h < 19) {\n  if (h > 7 || (h === 7 && min > 0)) lateMin = (h - 7) * 60 + min;\n} else {\n  if (h >= 19) lateMin = (h - 19) * 60 + min;\n  else if (h < 7) lateMin = (h + 5) * 60 + min;\n}\n\nconst days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];\nconst dd = String(sg.getDate()).padStart(2,'0');\nconst mm = String(sg.getMonth()+1).padStart(2,'0');\nconst sgDate = dd+'/'+mm+'/'+sg.getFullYear()+' ('+days[sg.getDay()]+')';\nconst timeStr = String(h).padStart(2,'0') + ':' + String(min).padStart(2,'0');\nconst sgTime = sg.toLocaleString('en-SG', { timeZone: 'Asia/Singapore' });\n\nconst chatId = item.chat_id || String(item['Telegram_ID'] || '');\n\nconst reply_markup = {\n  inline_keyboard: [\n    [{ text: '\\u2705 Clock In', callback_data: 'action_checkin' }],\n    [{ text: '\\uD83D\\uDEAA Clock Out', callback_data: 'action_checkout' }],\n    [{ text: '\\uD83D\\uDCCB History', callback_data: 'action_history' }]\n  ]\n};\n\nreturn [{ json: { ...item, chat_id: chatId, current_shift: shift, is_late: lateMin > 0, late_min: lateMin, sg_time: sgTime, sg_date: sgDate, sg_time_short: timeStr, reply_markup } }];"
       },
       "name": "Build Action Menu",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-176, 368],
+      "position": [32, 368],
       "id": "b3acb991-0b9e-43c6-a365-dbaf852b4fae"
     },
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "={{ '👋 Hello <b>' + $json['Name'] + '</b>!\\n\\n🪪 Staff ID: ' + $json['Staff ID'] + '\\n⏰ Shift: ' + $json.current_shift + '\\n\\nPlease select your action:' }}",
+        "text": "={{ '\\uD83C\\uDFE2 <b>GUARDFORCE SERVICES PTE LTD</b>\\n\\uD83D\\uDCC5 ' + $json.sg_date + '\\n\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\n\\n\\uD83D\\uDC64 <b>' + $json['Name'] + '</b>\\n\\uD83C\\uDFAB Staff ID: ' + $json['Staff ID'] + '\\n\\u23F0 Shift: ' + $json.current_shift + '\\n\\uD83D\\uDD50 Time: ' + $json.sg_time_short + '\\n\\nPlease select your action:' }}",
         "additionalFields": {
           "parse_mode": "HTML",
           "reply_markup": "={{ JSON.stringify($json.reply_markup) }}"
@@ -173,14 +135,9 @@
       "name": "Show Action Menu",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [32, 368],
+      "position": [240, 368],
       "id": "ace4d077-fcfe-47f5-8804-01b5c4a136f4",
-      "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
-      }
+      "credentials": { "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" } }
     },
     {
       "parameters": {
@@ -191,14 +148,9 @@
       "name": "Not Registered (Message)",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [-176, 528],
+      "position": [32, 528],
       "id": "0a16f73e-5412-476f-a7e2-171b852e4579",
-      "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
-      }
+      "credentials": { "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" } }
     },
     {
       "parameters": {
@@ -209,24 +161,9 @@
       "name": "Not Registered (Callback)",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [-176, 48],
+      "position": [32, 32],
       "id": "4f0acc0c-3d46-41f3-9fdb-6e7de5b553e1",
-      "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst data = item.callback_data || '';\n\nif (!data.startsWith('action_') && !data.startsWith('checkin_') && !data.startsWith('checkout_')) {\n  return [{ json: { ...item, route: 'unknown' } }];\n}\n\nconst now = new Date();\nconst sg = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));\nconst h = sg.getHours();\nconst shift = (h >= 7 && h < 19) ? 'Day Shift' : 'Night Shift';\nconst isLate = (shift === 'Day Shift' && h >= 8) || (shift === 'Night Shift' && (h >= 20 || h < 7));\nconst status = isLate ? 'Late' : 'On Time';\nconst sgTime = sg.toLocaleString('en-SG', { timeZone: 'Asia/Singapore' });\nconst chatId = $('Detect Type').item.json.chat_id;\n\nlet route = '';\nlet action = '';\nlet site = '';\n// Return reply_markup as a plain OBJECT — Telegram node will stringify it.\nlet reply_markup = null;\n\nif (data === 'action_checkin') {\n  route = 'show_sites';\n  action = 'Check In';\n  const sites = (item['Assigned Sites'] || 'S01').split(',').map(s => s.trim());\n  reply_markup = { inline_keyboard: sites.map(s => [{ text: '\\uD83D\\uDCCD ' + s, callback_data: 'checkin_' + s }]) };\n} else if (data === 'action_checkout') {\n  route = 'show_sites';\n  action = 'Check Out';\n  const sites = (item['Assigned Sites'] || 'S01').split(',').map(s => s.trim());\n  reply_markup = { inline_keyboard: sites.map(s => [{ text: '\\uD83D\\uDCCD ' + s, callback_data: 'checkout_' + s }]) };\n} else if (data.startsWith('checkin_')) {\n  route = 'log';\n  action = 'Check In';\n  site = data.replace('checkin_', '');\n} else if (data.startsWith('checkout_')) {\n  route = 'log';\n  action = 'Check Out';\n  site = data.replace('checkout_', '');\n}\n\nreturn [{ json: { ...item, chat_id: chatId, route, action, site, current_shift: shift, is_late: isLate, status, sg_time: sgTime, reply_markup } }];"
-      },
-      "name": "Process Callback",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [-176, 176],
-      "id": "ca311be8-8c6f-4857-adcd-4c58c9dc98df"
+      "credentials": { "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" } }
     },
     {
       "parameters": {
@@ -235,21 +172,22 @@
         "rules": {
           "rules": [
             { "value2": "show_sites" },
-            { "value2": "log" }
+            { "value2": "log" },
+            { "value2": "history" }
           ]
         },
-        "fallbackOutput": 0
+        "fallbackOutput": 3
       },
       "name": "Route?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 1,
-      "position": [32, 176],
+      "position": [240, 176],
       "id": "0db9fd13-5623-4171-82f0-16d42a97e85b"
     },
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "={{ '📍 <b>' + $json.action + '</b>\\n\\nPlease select your site:' }}",
+        "text": "={{ '\\uD83D\\uDCCD <b>' + $json.action + '</b>\\n\\nPlease select your site:' }}",
         "additionalFields": {
           "parse_mode": "HTML",
           "reply_markup": "={{ JSON.stringify($json.reply_markup) }}"
@@ -258,38 +196,65 @@
       "name": "Show Sites",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [224, 80],
+      "position": [448, 80],
       "id": "03515867-d828-40d4-a33c-bc5e9c1770f3",
-      "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
-      }
+      "credentials": { "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" } }
+    },
+    {
+      "parameters": {
+        "operation": "getRows",
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Attendance", "mode": "name" },
+        "filters": { "conditions": [{ "keyName": "Staff ID", "condition": "=", "keyValue": "={{ $json['Staff ID'] }}" }] },
+        "options": {}
+      },
+      "name": "History Lookup",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [448, 240],
+      "id": "history-lookup-001",
+      "credentials": { "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const all = $input.all();\nconst last5 = all.slice(-5).reverse();\n\n// Telegram_ID is stored in Attendance rows (added when logging)\nconst firstRow = all[0]?.json || {};\nconst chatId = String(firstRow['Telegram_ID'] || firstRow['Telegram ID'] || '');\nconst guardName = firstRow['Name'] || '';\nconst staffId = firstRow['Staff ID'] || '';\n\nlet text = '\\uD83C\\uDFE2 <b>GUARDFORCE SERVICES PTE LTD</b>\\n';\ntext += '\\uD83D\\uDCCB <b>ATTENDANCE HISTORY</b>\\n';\ntext += '\\uD83D\\uDC64 <b>' + guardName + '</b> | \\uD83C\\uDFAB ' + staffId + '\\n';\ntext += '\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\n';\n\nif (last5.length === 0) {\n  text += 'No records found.';\n} else {\n  last5.forEach((item, i) => {\n    const r = item.json;\n    const icon = r['Action'] === 'Check In' ? '\\u2705' : '\\uD83D\\uDEAA';\n    text += '\\n' + (i+1) + '. ' + icon + ' ' + (r['Action'] || '') + '\\n';\n    text += '   \\uD83D\\uDCCD ' + (r['Site'] || '') + ' | \\u23F0 ' + (r['Shift'] || '') + '\\n';\n    text += '   \\uD83D\\uDD50 ' + (r['Timestamp'] || '') + '\\n';\n    text += '   \\uD83D\\uDCCA ' + (r['Status'] || '') + '\\n';\n  });\n}\n\nreturn [{ json: { chat_id: chatId, history_text: text } }];"
+      },
+      "name": "Format History",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 240],
+      "id": "format-history-001"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.history_text }}",
+        "additionalFields": { "parse_mode": "HTML" }
+      },
+      "name": "Show History",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [832, 240],
+      "id": "show-history-001",
+      "credentials": { "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" } }
     },
     {
       "parameters": {
         "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg",
-          "mode": "id"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": "Attendance",
-          "mode": "name"
-        },
+        "documentId": { "__rl": true, "value": "1HwTGYiIQrMLNyMVlhi_BppsodOa6xZwZNqC5pnuMfUg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Attendance", "mode": "name" },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
             "Timestamp": "={{ $json.sg_time }}",
             "Staff ID": "={{ $json['Staff ID'] }}",
             "Name": "={{ $json['Name'] }}",
+            "Telegram_ID": "={{ $json['Telegram_ID'] }}",
             "Site": "={{ $json.site }}",
             "Action": "={{ $json.action }}",
             "Shift": "={{ $json.current_shift }}",
-            "Status": "={{ $json.status }}"
+            "Status": "={{ $json.status }}",
+            "Late_Min": "={{ $json.late_min }}"
           }
         },
         "options": {}
@@ -297,91 +262,58 @@
       "name": "Log Attendance",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [224, 272],
+      "position": [448, 400],
       "id": "fd851628-f0ae-4b03-b9c9-896d8a7a0a8c",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "fkooqHE06zipBeCm",
-          "name": "Google Sheets OAuth2 API"
-        }
-      }
+      "credentials": { "googleSheetsOAuth2Api": { "id": "fkooqHE06zipBeCm", "name": "Google Sheets OAuth2 API" } }
     },
     {
       "parameters": {
         "chatId": "={{ $json.chat_id }}",
-        "text": "={{ '✅ <b>Attendance Recorded!</b>\\n\\n👤 ' + $json['Name'] + '\\n🪪 ' + $json['Staff ID'] + '\\n📍 Site: ' + $json.site + '\\n🔄 ' + $json.action + '\\n⏰ ' + $json.current_shift + '\\n📊 ' + $json.status + '\\n🕐 ' + $json.sg_time }}",
-        "additionalFields": {
-          "parse_mode": "HTML"
-        }
+        "text": "={{ '\\uD83C\\uDFE2 <b>GUARDFORCE SERVICES PTE LTD</b>\\n\\uD83D\\uDCC5 ' + $json.sg_date + '\\n\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\n\\u2705 <b>Attendance Recorded!</b>\\n\\n\\uD83D\\uDC64 <b>' + $json['Name'] + '</b>\\n\\uD83C\\uDFAB Staff ID: ' + $json['Staff ID'] + '\\n\\uD83D\\uDCCD Site: ' + $json.site + '\\n\\n\\uD83D\\uDD04 ' + $json.action + ' | \\u23F0 ' + $json.current_shift + '\\n\\uD83D\\uDD50 Time: ' + $json.sg_time_short + '\\n\\uD83D\\uDCCA Status: ' + $json.status + ($json.late_min > 0 ? '\\n\\u23F1 Late: ' + $json.late_min + ' min' : '') }}",
+        "additionalFields": { "parse_mode": "HTML" }
       },
       "name": "Confirm to Guard",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [432, 272],
+      "position": [640, 400],
       "id": "77196d90-84ea-400f-8739-08fafa3f1c77",
-      "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
-      }
+      "credentials": { "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" } }
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json.is_late }}",
-              "value2": true
-            }
-          ]
-        }
+        "conditions": { "boolean": [{ "value1": "={{ $json.is_late }}", "value2": true }] }
       },
       "name": "Is Late?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [624, 272],
+      "position": [832, 400],
       "id": "0a351734-0905-4909-bf4e-c57d99d9f7c6"
     },
     {
       "parameters": {
         "chatId": "8743793467",
-        "text": "={{ '⚠️ <b>LATE ALERT</b>\\n\\n👤 ' + $json['Name'] + '\\n🪪 ' + $json['Staff ID'] + '\\n📍 ' + $json.site + '\\n⏰ ' + $json.current_shift + '\\n🕐 ' + $json.sg_time + '\\n\\n❗ Guard checked in LATE!' }}",
-        "additionalFields": {
-          "parse_mode": "HTML"
-        }
+        "text": "={{ '\\u26A0\\uFE0F <b>LATE ALERT</b>\\n\\uD83C\\uDFE2 GUARDFORCE SERVICES PTE LTD\\n\\uD83D\\uDCC5 ' + $json.sg_date + '\\n\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\n\\uD83D\\uDC64 ' + $json['Name'] + '\\n\\uD83C\\uDFAB ' + $json['Staff ID'] + '\\n\\uD83D\\uDCCD ' + $json.site + '\\n\\u23F0 ' + $json.current_shift + '\\n\\uD83D\\uDD50 ' + $json.sg_time_short + '\\n\\u23F1 Late: ' + $json.late_min + ' min\\n\\n\\u2757 Guard checked in LATE!' }}",
+        "additionalFields": { "parse_mode": "HTML" }
       },
       "name": "Alert Supervisor Late",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [832, 176],
+      "position": [1024, 320],
       "id": "90938925-da46-4bb1-b33b-80954265841f",
-      "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
-      }
+      "credentials": { "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" } }
     },
     {
       "parameters": {
         "chatId": "8743793467",
-        "text": "={{ '📋 <b>ATTENDANCE UPDATE</b>\\n\\n👤 ' + $json['Name'] + '\\n🪪 ' + $json['Staff ID'] + '\\n📍 ' + $json.site + '\\n🔄 ' + $json.action + '\\n⏰ ' + $json.current_shift + '\\n🕐 ' + $json.sg_time + '\\n✅ On Time' }}",
-        "additionalFields": {
-          "parse_mode": "HTML"
-        }
+        "text": "={{ '\\uD83D\\uDCCB <b>ATTENDANCE UPDATE</b>\\n\\uD83C\\uDFE2 GUARDFORCE SERVICES PTE LTD\\n\\uD83D\\uDCC5 ' + $json.sg_date + '\\n\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\u2500\\n\\uD83D\\uDC64 ' + $json['Name'] + '\\n\\uD83C\\uDFAB ' + $json['Staff ID'] + '\\n\\uD83D\\uDCCD ' + $json.site + '\\n\\uD83D\\uDD04 ' + $json.action + ' | \\u23F0 ' + $json.current_shift + '\\n\\uD83D\\uDD50 ' + $json.sg_time_short + '\\n\\u2705 On Time' }}",
+        "additionalFields": { "parse_mode": "HTML" }
       },
       "name": "Notify Supervisor OnTime",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [832, 368],
+      "position": [1024, 480],
       "id": "78064a22-064a-4b6d-9bff-5b4be0080de1",
-      "credentials": {
-        "telegramApi": {
-          "id": "tU4R9SEuNlBNrZWs",
-          "name": "Telegram account"
-        }
-      }
+      "credentials": { "telegramApi": { "id": "tU4R9SEuNlBNrZWs", "name": "Telegram account" } }
     }
   ],
   "connections": {
@@ -393,27 +325,39 @@
     },
     "Is Callback?": {
       "main": [
-        [{ "node": "Find Guard (Callback)", "type": "main", "index": 0 }],
-        [{ "node": "Find Guard (Message)", "type": "main", "index": 0 }]
+        [
+          { "node": "Find Guard (Callback)", "type": "main", "index": 0 },
+          { "node": "Merge (Callback)", "type": "main", "index": 1 }
+        ],
+        [
+          { "node": "Find Guard (Message)", "type": "main", "index": 0 },
+          { "node": "Merge (Message)", "type": "main", "index": 1 }
+        ]
       ]
-    },
-    "Find Guard (Message)": {
-      "main": [[{ "node": "Guard Found? (Message)", "type": "main", "index": 0 }]]
     },
     "Find Guard (Callback)": {
       "main": [[{ "node": "Guard Found? (Callback)", "type": "main", "index": 0 }]]
     },
-    "Guard Found? (Message)": {
-      "main": [
-        [{ "node": "Build Action Menu", "type": "main", "index": 0 }],
-        [{ "node": "Not Registered (Message)", "type": "main", "index": 0 }]
-      ]
+    "Find Guard (Message)": {
+      "main": [[{ "node": "Guard Found? (Message)", "type": "main", "index": 0 }]]
     },
     "Guard Found? (Callback)": {
       "main": [
-        [{ "node": "Process Callback", "type": "main", "index": 0 }],
+        [{ "node": "Merge (Callback)", "type": "main", "index": 0 }],
         [{ "node": "Not Registered (Callback)", "type": "main", "index": 0 }]
       ]
+    },
+    "Guard Found? (Message)": {
+      "main": [
+        [{ "node": "Merge (Message)", "type": "main", "index": 0 }],
+        [{ "node": "Not Registered (Message)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Merge (Callback)": {
+      "main": [[{ "node": "Process Callback", "type": "main", "index": 0 }]]
+    },
+    "Merge (Message)": {
+      "main": [[{ "node": "Build Action Menu", "type": "main", "index": 0 }]]
     },
     "Build Action Menu": {
       "main": [[{ "node": "Show Action Menu", "type": "main", "index": 0 }]]
@@ -424,8 +368,15 @@
     "Route?": {
       "main": [
         [{ "node": "Show Sites", "type": "main", "index": 0 }],
-        [{ "node": "Log Attendance", "type": "main", "index": 0 }]
+        [{ "node": "Log Attendance", "type": "main", "index": 0 }],
+        [{ "node": "History Lookup", "type": "main", "index": 0 }]
       ]
+    },
+    "History Lookup": {
+      "main": [[{ "node": "Format History", "type": "main", "index": 0 }]]
+    },
+    "Format History": {
+      "main": [[{ "node": "Show History", "type": "main", "index": 0 }]]
     },
     "Log Attendance": {
       "main": [[{ "node": "Confirm to Guard", "type": "main", "index": 0 }]]
