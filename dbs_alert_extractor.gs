@@ -105,7 +105,7 @@ function cleanColumnFBeforeBbb() {
     return;
   }
 
-  var range   = sheet.getRange(2, 6, lastRow - 1, 1); // column F, rows 2 to last
+  var range   = sheet.getRange(2, 6, lastRow - 1, 1);
   var values  = range.getValues();
   var keyword = "bbb";
   var count   = 0;
@@ -124,11 +124,43 @@ function cleanColumnFBeforeBbb() {
   notify('Done! Removed text before "' + keyword + '" in ' + count + ' cell(s) in column F.');
 }
 
+// -------------------------------------------------------------------
+// Clean column F: keep only text FROM "To" onwards (delete everything before "To")
+// -------------------------------------------------------------------
+function cleanColumnFKeepFromTo() {
+  var ss      = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet   = ss.getSheetByName("DBS Alerts") || ss.getActiveSheet();
+  var lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    notify("No data rows found in the sheet.");
+    return;
+  }
+
+  var range   = sheet.getRange(2, 6, lastRow - 1, 1); // column F, rows 2 to last
+  var values  = range.getValues();
+  var count   = 0;
+
+  var updated = values.map(function (row) {
+    var cell = row[0] !== null && row[0] !== undefined ? String(row[0]) : "";
+    var idx  = cell.indexOf("To");
+    if (idx > 0) {
+      count++;
+      return [cell.substring(idx)];
+    }
+    return [cell];
+  });
+
+  range.setValues(updated);
+  notify('Done! Kept text from "To" onwards in ' + count + ' cell(s) in column F.');
+}
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("DBS Tools")
     .addItem("Extract Alert Amounts",        "extractDbsAlerts")
     .addItem("Clean Col F (remove pre-bbb)", "cleanColumnFBeforeBbb")
+    .addItem("Clean Col F (keep from To)",   "cleanColumnFKeepFromTo")
     .addToUi();
 }
 
