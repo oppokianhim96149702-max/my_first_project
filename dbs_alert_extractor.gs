@@ -1,6 +1,6 @@
 var SENDER  = "ibanking.alert@dbs.com";
-var DAYS    = 90;   // only look back this many days (change as needed)
-var MAX_TH  = 200;  // max threads per run
+var DAYS    = 30;   // reduce if still timing out
+var MAX_TH  = 100;  // reduce if still timing out
 
 function extractDbsAlerts() {
   var ss    = SpreadsheetApp.getActiveSpreadsheet();
@@ -15,17 +15,23 @@ function extractDbsAlerts() {
        .setBackground("#4a86e8")
        .setFontColor("#ffffff");
 
-  // Build date-limited query  e.g. "from:... after:2025/02/27"
-  var since = new Date();
+  var since    = new Date();
   since.setDate(since.getDate() - DAYS);
   var afterStr = Utilities.formatDate(since, "GMT", "yyyy/MM/dd");
-  var query = "from:" + SENDER + " after:" + afterStr;
+  var query    = "from:" + SENDER + " after:" + afterStr;
 
-  var threads = GmailApp.search(query, 0, MAX_TH);
+  var threads  = GmailApp.search(query, 0, MAX_TH);
+  if (threads.length === 0) {
+    SpreadsheetApp.getUi().alert("No DBS alert emails found in the last " + DAYS + " days.");
+    return;
+  }
+
+  // Batch-fetch ALL messages in one API call instead of one-by-one
+  var allThreadMessages = GmailApp.getMessagesForThreads(threads);
   var data = [];
 
-  threads.forEach(function (thread) {
-    thread.getMessages().forEach(function (msg) {
+  allThreadMessages.forEach(function (threadMsgs) {
+    threadMsgs.forEach(function (msg) {
       var body   = msg.getPlainBody() || stripHtml(msg.getBody());
       var parsed = parseBody(body, msg.getDate());
       if (parsed) data.push(parsed);
@@ -33,14 +39,12 @@ function extractDbsAlerts() {
   });
 
   if (data.length === 0) {
-    SpreadsheetApp.getUi().alert("No DBS alert emails found in the last " + DAYS + " days.");
+    SpreadsheetApp.getUi().alert("Emails found but no SGD amounts could be extracted.");
     return;
   }
 
-  // Sort newest first
   data.sort(function (a, b) { return new Date(b[0]) - new Date(a[0]); });
 
-  // Write ALL rows in one call — much faster than appendRow in a loop
   sheet.getRange(2, 1, data.length, headers.length).setValues(data);
   sheet.autoResizeColumns(1, headers.length);
 
@@ -57,7 +61,7 @@ function parseBody(body, date) {
   var fromMatch = body.match(/From\s*:\s*(.+?)(?=\s+To\s*:)/i);
   var from = fromMatch ? fromMatch[1].trim() : "";
 
-  var toMatch = body.match(/To\s*:\s*(.+?)(?=\s+(?:Date|Reference|Remarks|$))/i);
+  var toMatch = body.match(/To\s*:\s*(.+?)(?=\s+(?:Date|Reference|Remarks|SGD|$))/i);
   var to = toMatch ? toMatch[1].trim() : "";
 
   var acMatch = body.match(/(?:A\/C\s+ending|ending\s+in|ending)\s+(\d{4,})/i);
