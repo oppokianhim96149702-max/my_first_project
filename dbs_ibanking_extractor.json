@@ -1,0 +1,218 @@
+{
+  "name": "DBS iBanking Alert Extractor",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "sender": "iBanking.alert@dbs.com",
+          "readStatus": "unread"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// DBS iBanking Alert - Extract Amount, Date, Recipient\nconst results = [];\n\nfor (const item of $input.all()) {\n  const subject  = item.json.subject  || '';\n  const body     = item.json.text     || item.json.snippet || '';\n  const html     = item.json.html     || '';\n  const content  = subject + '\\n' + body + '\\n' + html;\n\n  // ── Amount ──────────────────────────────────────────────────────────────\n  // Matches: \"SGD 1,234.56\"  \"S$ 500\"  \"SGD500.00\"  \"Amount: 99.00\"\n  let amount   = null;\n  let currency = 'SGD';\n  const amtRe  = /(?:SGD|S\\$)[\\s]?([\\d,]+\\.?\\d*)|(?:amount[:\\s]+)(?:SGD[\\s]?)?([\\d,]+\\.?\\d*)/i;\n  const amtM   = content.match(amtRe);\n  if (amtM) {\n    const raw = (amtM[1] || amtM[2]).replace(/,/g, '');\n    amount    = parseFloat(raw);\n  }\n\n  // ── Date ────────────────────────────────────────────────────────────────\n  // Matches: \"28 May 2026\"  \"28/05/2026\"  \"2026-05-28\"  \"28-05-2026\"\n  let txnDate = null;\n  const dateRe = /(?:date[:\\s]+)?(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{4})|(?:date[:\\s]+)?(\\d{2}[\\/-]\\d{2}[\\/-]\\d{4})|(\\d{4}-\\d{2}-\\d{2})/i;\n  const dateM  = content.match(dateRe);\n  if (dateM) {\n    txnDate = (dateM[1] || dateM[2] || dateM[3]).trim();\n  }\n\n  // ── Recipient ────────────────────────────────────────────────────────────\n  // Covers PayNow, FAST, bill payment, card merchant label blocks:\n  // \"To: John Doe\"  \"Payee: NTUC\"  \"Merchant: 7-Eleven\"  \"Transfer to: Alice\"\n  let recipient = null;\n  const recipRe = /(?:to|payee|recipient|merchant|paid to|transfer to|bill to)[:\\s]+([^\\n\\r<,]{2,60}?)(?:\\s*(?:\\n|\\r|<|,|\\bon\\b|\\bref\\b|\\btime\\b|\\bdate\\b|\\$|SGD))/i;\n  const recipM  = content.match(recipRe);\n  if (recipM) {\n    recipient = recipM[1].trim();\n  }\n\n  results.push({\n    json: {\n      emailId:   item.json.id,\n      subject,\n      from:      item.json.from,\n      emailDate: item.json.date,\n      amount,\n      currency,\n      txnDate,\n      recipient,\n      extractionOk: !!(amount && txnDate && recipient)\n    }\n  });\n}\n\nreturn results;\n"
+      },
+      "id": "a1b2c3d4-0002-0002-0002-000000000002",
+      "name": "Extract Amount, Date, Recipient",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-01",
+              "leftValue": "={{ $json.extractionOk }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-0003-0003-000000000003",
+      "name": "All Fields Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "out-01",
+              "name": "amount",
+              "value": "={{ $json.amount }}",
+              "type": "number"
+            },
+            {
+              "id": "out-02",
+              "name": "currency",
+              "value": "={{ $json.currency }}",
+              "type": "string"
+            },
+            {
+              "id": "out-03",
+              "name": "txnDate",
+              "value": "={{ $json.txnDate }}",
+              "type": "string"
+            },
+            {
+              "id": "out-04",
+              "name": "recipient",
+              "value": "={{ $json.recipient }}",
+              "type": "string"
+            },
+            {
+              "id": "out-05",
+              "name": "emailId",
+              "value": "={{ $json.emailId }}",
+              "type": "string"
+            },
+            {
+              "id": "out-06",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-0004-0004-000000000004",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [980, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-01",
+              "name": "error",
+              "value": "Partial extraction — check email manually",
+              "type": "string"
+            },
+            {
+              "id": "err-02",
+              "name": "amount",
+              "value": "={{ $json.amount }}",
+              "type": "number"
+            },
+            {
+              "id": "err-03",
+              "name": "txnDate",
+              "value": "={{ $json.txnDate }}",
+              "type": "string"
+            },
+            {
+              "id": "err-04",
+              "name": "recipient",
+              "value": "={{ $json.recipient }}",
+              "type": "string"
+            },
+            {
+              "id": "err-05",
+              "name": "emailId",
+              "value": "={{ $json.emailId }}",
+              "type": "string"
+            },
+            {
+              "id": "err-06",
+              "name": "subject",
+              "value": "={{ $json.subject }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0005-0005-0005-000000000005",
+      "name": "Flag Incomplete",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [980, 440]
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Amount, Date, Recipient",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Amount, Date, Recipient": {
+      "main": [
+        [
+          {
+            "node": "All Fields Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Fields Found?": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag Incomplete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["dbs", "ibanking", "gmail", "finance"]
+}
