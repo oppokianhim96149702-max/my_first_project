@@ -1,0 +1,175 @@
+{
+  "name": "gmailpaynowscan_v1_1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 460]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 100,
+        "filters": {
+          "sender": "ibanking.alert@dbs.com",
+          "receivedAfter": "={{ $now.minus(2, 'days').toISO() }}"
+        },
+        "options": {
+          "format": "full"
+        }
+      },
+      "id": "a1b2c3d4-0002-0002-0002-000000000002",
+      "name": "Gmail Get Many",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [460, 460],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\n\n// Try plain text body first, fall back to snippet\nconst body = item.text || item.snippet || item.body || '';\n\n// Extract Amount\nconst amountMatch = body.match(/Amount\\s*:\\s*SGD\\s*([\\d,]+\\.?\\d*)/i);\nconst amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : null;\n\n// Extract From\nconst fromMatch = body.match(/From\\s*:\\s*(.+?)(?=\\s+To\\s*:)/i);\nconst from = fromMatch ? fromMatch[1].trim() : '';\n\n// Extract To\nconst toMatch = body.match(/To\\s*:\\s*(.+?)(?=\\s+(?:Date|Reference|Remarks|SGD|$))/i);\nconst to = toMatch ? toMatch[1].trim() : '';\n\n// Extract A/C Ending\nconst acMatch = body.match(/(?:A\\/C\\s+ending|ending\\s+in|ending)\\s+(\\d{4,})/i);\nconst ac = acMatch ? '****' + acMatch[1] : '';\n\n// Date\nconst rawDate = item.date || item.internalDate;\nconst dateStr = rawDate\n  ? new Date(isNaN(rawDate) ? rawDate : Number(rawDate))\n      .toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })\n  : '';\n\n// Determine Type\nlet type = 'Transaction';\nconst lower = body.toLowerCase();\nif (/paynow|fast transfer|fund transfer/.test(lower)) {\n  if (/posb|dbs/i.test(from))     type = 'Transfer Out';\n  else if (/posb|dbs/i.test(to)) type = 'Transfer In';\n  else                             type = 'Transfer';\n} else if (/card.*(debit|payment|purchase|spent)|merchant/i.test(lower)) {\n  type = 'Card Debit';\n} else if (/credit|deposit|received|incoming/.test(lower)) {\n  type = 'Credit';\n} else if (/debit|withdraw|payment|spent/.test(lower)) {\n  type = 'Debit';\n} else if (/posb|dbs/i.test(from)) {\n  type = 'Debit';\n} else if (/posb|dbs/i.test(to)) {\n  type = 'Credit';\n}\n\nreturn {\n  json: {\n    dateTime:  dateStr,\n    type:      type,\n    amount:    amount,\n    from:      from,\n    to:        to,\n    acEnding:  ac,\n    hasAmount: amount !== null\n  }\n};"
+      },
+      "id": "a1b2c3d4-0003-0003-0003-000000000003",
+      "name": "Extract Amount and Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 460]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-001",
+              "leftValue": "={{ $json.hasAmount }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-0004-0004-000000000004",
+      "name": "Both Fields Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 460]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f1", "name": "Date & Time",   "value": "={{ $json.dateTime }}",  "type": "string" },
+            { "id": "f2", "name": "Type",           "value": "={{ $json.type }}",      "type": "string" },
+            { "id": "f3", "name": "Amount (SGD)",   "value": "={{ $json.amount }}",    "type": "number" },
+            { "id": "f4", "name": "From",           "value": "={{ $json.from }}",      "type": "string" },
+            { "id": "f5", "name": "To",             "value": "={{ $json.to }}",        "type": "string" },
+            { "id": "f6", "name": "A/C Ending",     "value": "={{ $json.acEnding }}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0005-0005-0005-000000000005",
+      "name": "Format Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1120, 340]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "DBS Alerts",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0006-0006-0006-000000000006",
+      "name": "Append row in sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1340, 340],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "g1", "name": "status",  "value": "incomplete - no amount found", "type": "string" },
+            { "id": "g2", "name": "snippet", "value": "={{ $json.snippet || '' }}",   "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-0007-0007-000000000007",
+      "name": "Flag Incomplete",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1120, 580]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{ "node": "Gmail Get Many",          "type": "main", "index": 0 }]]
+    },
+    "Gmail Get Many": {
+      "main": [[{ "node": "Extract Amount and Date", "type": "main", "index": 0 }]]
+    },
+    "Extract Amount and Date": {
+      "main": [[{ "node": "Both Fields Found?",      "type": "main", "index": 0 }]]
+    },
+    "Both Fields Found?": {
+      "main": [
+        [{ "node": "Format Output",    "type": "main", "index": 0 }],
+        [{ "node": "Flag Incomplete",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Output": {
+      "main": [[{ "node": "Append row in sheet",     "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": []
+}
