@@ -22,7 +22,7 @@ function extractDbsAlerts() {
 
   var threads  = GmailApp.search(query, 0, MAX_TH);
   if (threads.length === 0) {
-    SpreadsheetApp.getUi().alert("No DBS alert emails found in the last " + DAYS + " days.");
+    notify("No DBS alert emails found in the last " + DAYS + " days.");
     return;
   }
 
@@ -39,7 +39,7 @@ function extractDbsAlerts() {
   });
 
   if (data.length === 0) {
-    SpreadsheetApp.getUi().alert("Emails found but no SGD amounts could be extracted.");
+    notify("Emails found but no SGD amounts could be extracted.");
     return;
   }
 
@@ -48,7 +48,7 @@ function extractDbsAlerts() {
   sheet.getRange(2, 1, data.length, headers.length).setValues(data);
   sheet.autoResizeColumns(1, headers.length);
 
-  SpreadsheetApp.getUi().alert("Done! Extracted " + data.length + " transaction(s) from the last " + DAYS + " days.");
+  notify("Done! Extracted " + data.length + " transaction(s) from the last " + DAYS + " days.");
 }
 
 function parseBody(body, date) {
@@ -104,5 +104,11 @@ function installDailyTrigger() {
     if (t.getHandlerFunction() === "extractDbsAlerts") ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger("extractDbsAlerts").timeBased().everyDays(1).atHour(8).create();
-  SpreadsheetApp.getUi().alert("Daily trigger installed — runs every day at 8 AM.");
+  notify("Daily trigger installed — runs every day at 8 AM.");
+}
+
+// Safe alert: works both from spreadsheet UI and from triggers/script editor
+function notify(msg) {
+  Logger.log(msg);
+  try { SpreadsheetApp.getUi().alert(msg); } catch(e) {}
 }
