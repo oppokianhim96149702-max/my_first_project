@@ -23,9 +23,7 @@
           "sender": "ibanking.alert@dbs.com",
           "readStatus": "unread"
         },
-        "options": {
-          "format": "full"
-        }
+        "options": {}
       },
       "id": "929e1984-b008-4283-ba84-66c123ab8edd",
       "name": "Get many messages",
@@ -41,13 +39,32 @@
     },
     {
       "parameters": {
-        "jsCode": "// DBS iBanking Alert - Extract Amount, Date and To\n// v10: format:full for headers, internalDate fallback, snippet in content\n\nfunction decodeEntities(s) {\n  return s\n    .replace(/&amp;/gi, '&')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&quot;/gi, '\"');\n}\n\nfunction stripHtml(s) {\n  return decodeEntities(\n    s\n      .replace(/<br\\s*\\/?>/gi, '\\n')\n      .replace(/<\\/(?:p|div|tr)>/gi, '\\n')\n      .replace(/<\\/td>/gi, ' ')\n      .replace(/<[^>]+>/g, '')\n  ).replace(/[ \\t]{2,}/g, ' ').trim();\n}\n\nfunction extractFromPayload(payload) {\n  if (!payload) return '';\n  let plain = '', html = '';\n\n  function walk(node) {\n    if (!node) return;\n    const mime = (node.mimeType || '').toLowerCase();\n    const data = node.body && node.body.data ? node.body.data : null;\n    if (data) {\n      try {\n        const decoded = Buffer.from(data, 'base64').toString('utf-8');\n        if (mime === 'text/plain') plain = plain || decoded;\n        if (mime === 'text/html')  html  = html  || decoded;\n      } catch(e) {}\n    }\n    if (node.parts) node.parts.forEach(walk);\n  }\n\n  // Handle non-multipart: body directly on payload\n  if (payload.body && payload.body.data) walk(payload);\n  // Handle multipart: walk all parts\n  if (payload.parts) payload.parts.forEach(walk);\n\n  return plain ? decodeEntities(plain) : (html ? stripHtml(html) : '');\n}\n\n// Gmail Get Many with format:full returns headers as array [{name, value}]\nfunction getHeader(headers, name) {\n  if (!Array.isArray(headers)) return '';\n  const h = headers.find(h => (h.name || '').toLowerCase() === name.toLowerCase());\n  return h ? (h.value || '') : '';\n}\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  // With format:full, headers are in payload.headers[]\n  const hdrs     = item.json.payload && item.json.payload.headers ? item.json.payload.headers : [];\n  const subject  = item.json.subject   || getHeader(hdrs, 'subject') || '';\n  const fromAddr = item.json.from      || getHeader(hdrs, 'from')    || '';\n  const dateVal  = item.json.date      || getHeader(hdrs, 'date')    || '';\n\n  // internalDate is ALWAYS present from Gmail API (Unix ms timestamp)\n  const internalDateMs = item.json.internalDate ? Number(item.json.internalDate) : null;\n  const emailYear = internalDateMs\n    ? new Date(internalDateMs).getFullYear()\n    : (dateVal ? new Date(dateVal).getFullYear() : new Date().getFullYear());\n\n  // Body: check all possible locations in order\n  let body = '';\n  let bodySource = 'none';\n  if (item.json.text && item.json.text.trim()) {\n    body = decodeEntities(item.json.text); bodySource = 'text';\n  } else if (item.json.body && item.json.body.trim()) {\n    body = stripHtml(item.json.body); bodySource = 'body';\n  } else if (item.json.html && item.json.html.trim()) {\n    body = stripHtml(item.json.html); bodySource = 'html';\n  } else if (item.json.payload) {\n    body = extractFromPayload(item.json.payload); bodySource = 'payload';\n  }\n\n  // Always include snippet as extra extraction source (handles partial data)\n  const snippet = decodeEntities(item.json.snippet || '');\n  const content = subject + '\\n' + body + '\\n' + snippet;\n\n  // ── Amount ──────────────────────────────────────────────────────────────\n  let amount = null;\n  const amtPatterns = [\n    /(?:SGD|S\\$)\\s*([\\d,]+\\.\\d{2})/i,\n    /(?:SGD|S\\$)\\s*([\\d,]+)/i,\n    /amount[:\\s]+(?:SGD|S\\$)?\\s*([\\d,]+\\.?\\d*)/i,\n    /of\\s+(?:SGD|S\\$)\\s*([\\d,]+\\.?\\d*)/i,\n    /(?:debit|credit)(?:ed)?[^\\d]{0,20}([\\d,]+\\.\\d{2})/i,\n  ];\n  for (const re of amtPatterns) {\n    const m = content.match(re);\n    if (m) { amount = parseFloat(m[1].replace(/,/g, '')); break; }\n  }\n\n  // ── Date ────────────────────────────────────────────────────────────────\n  let txnDate = null;\n  const datePatterns = [\n    /(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{4})/i,\n    /Date\\s*[&]?\\s*Time\\s*:\\s*(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{1,2}:\\d{2})?/i,\n    /Date\\s*:\\s*(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{4})?/i,\n    /dated?\\s+(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{4})?/i,\n    /(\\d{2}[\\/-]\\d{2}[\\/-]\\d{4})/,\n    /(\\d{4}-\\d{2}-\\d{2})/,\n  ];\n  for (const re of datePatterns) {\n    const m = content.match(re);\n    if (m) {\n      let d = m[1].trim();\n      if (!/\\d{4}/.test(d)) d = d + ' ' + emailYear;\n      txnDate = d;\n      break;\n    }\n  }\n\n  // Fallback: derive date from internalDate — always available from Gmail API\n  if (!txnDate && internalDateMs) {\n    const dt = new Date(internalDateMs);\n    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];\n    txnDate = dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();\n  }\n\n  // ── To ──────────────────────────────────────────────────────────────────\n  let toRecipient = null;\n  const toPatterns = [\n    /\\bTo:\\s+(?!view\\b)([^\\n\\r]+)/i,\n    /From:[^\\n\\r]+[\\n\\r]+\\s*To:\\s*([^\\n\\r]+)/i,\n    /\\bTo:\\s{2,}([^\\n\\r]+)/,\n  ];\n  for (const re of toPatterns) {\n    const m = content.match(re);\n    if (m && m[1] && m[1].trim().length > 1) {\n      toRecipient = m[1].trim();\n      break;\n    }\n  }\n\n  results.push({\n    json: {\n      emailId:      item.json.id,\n      subject,\n      from:         fromAddr,\n      emailDate:    dateVal || (internalDateMs ? new Date(internalDateMs).toISOString() : ''),\n      amount,\n      currency:     'SGD',\n      txnDate,\n      to:           toRecipient,\n      extractionOk: amount !== null,\n      _debug: {\n        amountFound:    amount      !== null,\n        dateFound:      txnDate     !== null,\n        toFound:        toRecipient !== null,\n        bodySource,\n        bodyPreview:    body.substring(0, 600),\n        snippetPreview: snippet.substring(0, 200)\n      }\n    }\n  });\n}\n\nreturn results;\n"
+        "resource": "message",
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "options": {}
+      },
+      "id": "get-msg-full-001",
+      "name": "Get Full Message",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [160, 160],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "CzuxjUg8Cf6BkCkj",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// DBS iBanking Alert - Extract Amount, Date and To\n// v11: Get Full Message node provides text/html/subject/from directly\n\nfunction decodeEntities(s) {\n  return s\n    .replace(/&amp;/gi, '&')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&quot;/gi, '\"');\n}\n\nfunction stripHtml(s) {\n  return decodeEntities(\n    s\n      .replace(/<br\\s*\\/?>/gi, '\\n')\n      .replace(/<\\/(?:p|div|tr)>/gi, '\\n')\n      .replace(/<\\/td>/gi, ' ')\n      .replace(/<[^>]+>/g, '')\n  ).replace(/[ \\t]{2,}/g, ' ').trim();\n}\n\nfunction extractFromPayload(payload) {\n  if (!payload) return '';\n  let plain = '', html = '';\n\n  function walk(node) {\n    if (!node) return;\n    const mime = (node.mimeType || '').toLowerCase();\n    const data = node.body && node.body.data ? node.body.data : null;\n    if (data) {\n      try {\n        const decoded = Buffer.from(data, 'base64').toString('utf-8');\n        if (mime === 'text/plain') plain = plain || decoded;\n        if (mime === 'text/html')  html  = html  || decoded;\n      } catch(e) {}\n    }\n    if (node.parts) node.parts.forEach(walk);\n  }\n\n  if (payload.body && payload.body.data) walk(payload);\n  if (payload.parts) payload.parts.forEach(walk);\n\n  return plain ? decodeEntities(plain) : (html ? stripHtml(html) : '');\n}\n\nfunction getHeader(headers, name) {\n  if (!Array.isArray(headers)) return '';\n  const h = headers.find(h => (h.name || '').toLowerCase() === name.toLowerCase());\n  return h ? (h.value || '') : '';\n}\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  // Get Full Message (operation:get) returns resolved fields at top level\n  const hdrs     = item.json.payload && item.json.payload.headers ? item.json.payload.headers : [];\n  const subject  = item.json.subject  || getHeader(hdrs, 'subject') || '';\n  const fromAddr = item.json.from     || getHeader(hdrs, 'from')    || '';\n  const dateVal  = item.json.date     || getHeader(hdrs, 'date')    || '';\n\n  // internalDate: check both top-level and inside payload\n  const rawInternal = item.json.internalDate ||\n    (item.json.payload && item.json.payload.internalDate) || null;\n  const internalDateMs = rawInternal ? Number(rawInternal) : null;\n\n  const emailYear = internalDateMs\n    ? new Date(internalDateMs).getFullYear()\n    : (dateVal ? new Date(dateVal).getFullYear() : new Date().getFullYear());\n\n  // Body: Get Full Message provides text/html directly\n  let body = '';\n  let bodySource = 'none';\n  if (item.json.text && item.json.text.trim()) {\n    body = decodeEntities(item.json.text); bodySource = 'text';\n  } else if (item.json.body && item.json.body.trim()) {\n    body = stripHtml(item.json.body); bodySource = 'body';\n  } else if (item.json.html && item.json.html.trim()) {\n    body = stripHtml(item.json.html); bodySource = 'html';\n  } else if (item.json.payload) {\n    body = extractFromPayload(item.json.payload); bodySource = 'payload';\n  }\n\n  // Always include snippet as extra extraction source\n  const snippet = decodeEntities(item.json.snippet || '');\n  const content = subject + '\\n' + body + '\\n' + snippet;\n\n  // ── Amount ──────────────────────────────────────────────────────────────\n  let amount = null;\n  const amtPatterns = [\n    /(?:SGD|S\\$)\\s*([\\d,]+\\.\\d{2})/i,\n    /(?:SGD|S\\$)\\s*([\\d,]+)/i,\n    /amount[:\\s]+(?:SGD|S\\$)?\\s*([\\d,]+\\.?\\d*)/i,\n    /of\\s+(?:SGD|S\\$)\\s*([\\d,]+\\.?\\d*)/i,\n    /(?:debit|credit)(?:ed)?[^\\d]{0,20}([\\d,]+\\.\\d{2})/i,\n  ];\n  for (const re of amtPatterns) {\n    const m = content.match(re);\n    if (m) { amount = parseFloat(m[1].replace(/,/g, '')); break; }\n  }\n\n  // ── Date ────────────────────────────────────────────────────────────────\n  let txnDate = null;\n  const datePatterns = [\n    /(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{4})/i,\n    /Date\\s*[&]?\\s*Time\\s*:\\s*(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{1,2}:\\d{2})?/i,\n    /Date\\s*:\\s*(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{4})?/i,\n    /dated?\\s+(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{4})?/i,\n    /(\\d{2}[\\/-]\\d{2}[\\/-]\\d{4})/,\n    /(\\d{4}-\\d{2}-\\d{2})/,\n  ];\n  for (const re of datePatterns) {\n    const m = content.match(re);\n    if (m) {\n      let d = m[1].trim();\n      if (!/\\d{4}/.test(d)) d = d + ' ' + emailYear;\n      txnDate = d;\n      break;\n    }\n  }\n\n  // Fallback 1: parse email Date header (from resolved-format item.json.date)\n  if (!txnDate && dateVal) {\n    try {\n      const dt = new Date(dateVal);\n      if (!isNaN(dt.getTime())) {\n        const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];\n        txnDate = dt.getDate() + ' ' + mo[dt.getMonth()] + ' ' + dt.getFullYear();\n      }\n    } catch(e) {}\n  }\n\n  // Fallback 2: internalDate Unix timestamp\n  if (!txnDate && internalDateMs) {\n    const dt = new Date(internalDateMs);\n    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];\n    txnDate = dt.getDate() + ' ' + mo[dt.getMonth()] + ' ' + dt.getFullYear();\n  }\n\n  // ── To ──────────────────────────────────────────────────────────────────\n  let toRecipient = null;\n  const toPatterns = [\n    /\\bTo:\\s+(?!view\\b)([^\\n\\r]+)/i,\n    /From:[^\\n\\r]+[\\n\\r]+\\s*To:\\s*([^\\n\\r]+)/i,\n    /\\bTo:\\s{2,}([^\\n\\r]+)/,\n  ];\n  for (const re of toPatterns) {\n    const m = content.match(re);\n    if (m && m[1] && m[1].trim().length > 1) {\n      toRecipient = m[1].trim();\n      break;\n    }\n  }\n\n  results.push({\n    json: {\n      emailId:      item.json.id,\n      subject,\n      from:         fromAddr,\n      emailDate:    dateVal || (internalDateMs ? new Date(internalDateMs).toISOString() : ''),\n      amount,\n      currency:     'SGD',\n      txnDate,\n      to:           toRecipient,\n      extractionOk: amount !== null,\n      _debug: {\n        amountFound:    amount      !== null,\n        dateFound:      txnDate     !== null,\n        toFound:        toRecipient !== null,\n        bodySource,\n        bodyPreview:    body.substring(0, 600),\n        snippetPreview: snippet.substring(0, 200)\n      }\n    }\n  });\n}\n\nreturn results;\n"
       },
       "id": "efd2266f-0cd4-4990-b7a2-b7ed12d48708",
       "name": "Extract Amount and Date",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [160, 160]
+      "position": [400, 160]
     },
     {
       "parameters": {
@@ -74,7 +91,7 @@
       "name": "Both Fields Found?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [432, 160]
+      "position": [640, 160]
     },
     {
       "parameters": {
@@ -94,7 +111,7 @@
       "name": "Format Output",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [688, 48]
+      "position": [880, 48]
     },
     {
       "parameters": {
@@ -114,7 +131,7 @@
       "name": "Flag Incomplete",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [688, 288]
+      "position": [880, 288]
     },
     {
       "parameters": {
@@ -150,7 +167,7 @@
       },
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
-      "position": [896, 48],
+      "position": [1120, 48],
       "id": "1246a0a9-c461-4a9a-a136-2027eb51d182",
       "name": "Append row in sheet",
       "credentials": {
@@ -164,7 +181,8 @@
   "pinData": {},
   "connections": {
     "Schedule Trigger":        { "main": [[{ "node": "Get many messages",       "type": "main", "index": 0 }]] },
-    "Get many messages":       { "main": [[{ "node": "Extract Amount and Date", "type": "main", "index": 0 }]] },
+    "Get many messages":       { "main": [[{ "node": "Get Full Message",         "type": "main", "index": 0 }]] },
+    "Get Full Message":        { "main": [[{ "node": "Extract Amount and Date", "type": "main", "index": 0 }]] },
     "Extract Amount and Date": { "main": [[{ "node": "Both Fields Found?",      "type": "main", "index": 0 }]] },
     "Both Fields Found?": {
       "main": [
