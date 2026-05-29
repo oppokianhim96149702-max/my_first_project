@@ -3,20 +3,32 @@
   "nodes": [
     {
       "parameters": {
-        "pollTimes": {
-          "item": [{ "mode": "everyMinute" }]
-        },
-        "simple": false,
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 5 }]
+        }
+      },
+      "id": "schedule-001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-320, 160]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 10,
         "filters": {
-          "readStatus": "both",
-          "sender": "ibanking.alert@dbs.com"
+          "sender": "ibanking.alert@dbs.com",
+          "readStatus": "unread"
         },
         "options": {}
       },
-      "id": "976ddf84-340b-4cd3-8b87-0e01db0a2536",
-      "name": "Gmail Trigger",
-      "type": "n8n-nodes-base.gmailTrigger",
-      "typeVersion": 1,
+      "id": "929e1984-b008-4283-ba84-66c123ab8edd",
+      "name": "Get many messages",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
       "position": [-96, 160],
       "credentials": {
         "gmailOAuth2": {
@@ -149,7 +161,8 @@
   ],
   "pinData": {},
   "connections": {
-    "Gmail Trigger":           { "main": [[{ "node": "Extract Amount and Date", "type": "main", "index": 0 }]] },
+    "Schedule Trigger":        { "main": [[{ "node": "Get many messages",       "type": "main", "index": 0 }]] },
+    "Get many messages":       { "main": [[{ "node": "Extract Amount and Date", "type": "main", "index": 0 }]] },
     "Extract Amount and Date": { "main": [[{ "node": "Both Fields Found?",      "type": "main", "index": 0 }]] },
     "Both Fields Found?": {
       "main": [
