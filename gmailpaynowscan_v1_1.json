@@ -13,11 +13,11 @@
         },
         "options": {}
       },
-      "id": "ac58a2f8-6222-4f0b-80b0-16a7e26bbe16",
+      "id": "976ddf84-340b-4cd3-8b87-0e01db0a2536",
       "name": "Gmail Trigger",
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1,
-      "position": [-848, 96],
+      "position": [-96, 160],
       "credentials": {
         "gmailOAuth2": {
           "id": "CzuxjUg8Cf6BkCkj",
@@ -27,13 +27,13 @@
     },
     {
       "parameters": {
-        "jsCode": "// DBS iBanking Alert - Extract Amount, Date and To\n// v8: fixed To: extraction for HTML table format\n\nfunction decodeEntities(s) {\n  return s\n    .replace(/&amp;/gi, '&')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&quot;/gi, '\"');\n}\n\nfunction stripHtml(s) {\n  return decodeEntities(\n    s\n      .replace(/<br\\s*\\/?>/gi, '\\n')\n      .replace(/<\\/(?:p|div|tr)>/gi, '\\n')\n      .replace(/<\\/td>/gi, ' ')\n      .replace(/<[^>]+>/g, '')\n  ).replace(/[ \\t]{2,}/g, ' ').trim();\n}\n\nfunction extractFromPayload(payload) {\n  if (!payload) return '';\n  let plain = '', html = '';\n  function walk(node) {\n    if (!node) return;\n    const mime = (node.mimeType || '').toLowerCase();\n    const data = node.body && node.body.data ? node.body.data : null;\n    if (data) {\n      const decoded = Buffer.from(data, 'base64').toString('utf-8');\n      if (mime === 'text/plain') plain = plain || decoded;\n      if (mime === 'text/html')  html  = html  || decoded;\n    }\n    if (node.parts) node.parts.forEach(walk);\n  }\n  walk(payload);\n  return plain ? decodeEntities(plain) : stripHtml(html);\n}\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const subject = item.json.subject || '';\n\n  let body = '';\n  if (item.json.text && item.json.text.trim())       body = decodeEntities(item.json.text);\n  else if (item.json.html && item.json.html.trim())  body = stripHtml(item.json.html);\n  else if (item.json.payload)                        body = extractFromPayload(item.json.payload);\n  else                                               body = decodeEntities(item.json.snippet || '');\n\n  const content = subject + '\\n' + body;\n\n  const emailYear = item.json.date\n    ? new Date(item.json.date).getFullYear()\n    : new Date().getFullYear();\n\n  // ── Amount ──────────────────────────────────────────────────────────────\n  let amount = null;\n  const amtPatterns = [\n    /(?:SGD|S\\$)\\s*([\\d,]+\\.\\d{2})/i,\n    /(?:SGD|S\\$)\\s*([\\d,]+)/i,\n    /amount[:\\s]+(?:SGD|S\\$)?\\s*([\\d,]+\\.?\\d*)/i,\n    /of\\s+(?:SGD|S\\$)\\s*([\\d,]+\\.?\\d*)/i,\n    /(?:debit|credit)(?:ed)?[^\\d]{0,20}([\\d,]+\\.\\d{2})/i,\n  ];\n  for (const re of amtPatterns) {\n    const m = content.match(re);\n    if (m) { amount = parseFloat(m[1].replace(/,/g, '')); break; }\n  }\n\n  // ── Date ────────────────────────────────────────────────────────────────\n  let txnDate = null;\n  const datePatterns = [\n    /(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{4})/i,\n    /Date\\s*[&]?\\s*Time\\s*:\\s*(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{1,2}:\\d{2})?/i,\n    /Date\\s*:\\s*(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{4})?/i,\n    /dated?\\s+(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{4})?/i,\n    /(\\d{2}[\\/-]\\d{2}[\\/-]\\d{4})/,\n    /(\\d{4}-\\d{2}-\\d{2})/,\n  ];\n  for (const re of datePatterns) {\n    const m = content.match(re);\n    if (m) {\n      let d = m[1].trim();\n      if (!/\\d{4}/.test(d)) d = d + ' ' + emailYear;\n      txnDate = d;\n      break;\n    }\n  }\n\n  // ── To ──────────────────────────────────────────────────────────────────\n  // DBS email is HTML table: To: and value are in <td> cells.\n  // After stripping they appear on same line: \"To: FOMO PAY PTE. LTD.\"\n  // Negative lookahead skips \"To view transaction details...\"\n  let toRecipient = null;\n  const toPatterns = [\n    /\\bTo:\\s+(?!view\\b)([^\\n\\r]+)/i,\n    /From:[^\\n\\r]+[\\n\\r]+\\s*To:\\s*([^\\n\\r]+)/i,\n    /\\bTo:\\s{2,}([^\\n\\r]+)/,\n  ];\n  for (const re of toPatterns) {\n    const m = content.match(re);\n    if (m && m[1] && m[1].trim().length > 1) {\n      toRecipient = m[1].trim();\n      break;\n    }\n  }\n\n  results.push({\n    json: {\n      emailId:      item.json.id,\n      subject,\n      from:         item.json.from,\n      emailDate:    item.json.date,\n      amount,\n      currency:     'SGD',\n      txnDate,\n      to:           toRecipient,\n      extractionOk: !!(amount && txnDate),\n      _debug: {\n        amountFound: amount      !== null,\n        dateFound:   txnDate     !== null,\n        toFound:     toRecipient !== null,\n        bodySource:  item.json.text ? 'text' : item.json.html ? 'html' : item.json.payload ? 'payload' : 'snippet',\n        bodyPreview: body.substring(0, 600)\n      }\n    }\n  });\n}\n\nreturn results;\n"
+        "jsCode": "// DBS iBanking Alert - Extract Amount, Date and To\n// v8: fixed To: extraction for HTML table format\n\nfunction decodeEntities(s) {\n  return s\n    .replace(/&amp;/gi, '&')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&lt;/gi, '<')\n    .replace(/&gt;/gi, '>')\n    .replace(/&quot;/gi, '\"');\n}\n\nfunction stripHtml(s) {\n  return decodeEntities(\n    s\n      .replace(/<br\\s*\\/?>/gi, '\\n')\n      .replace(/<\\/(?:p|div|tr)>/gi, '\\n')\n      .replace(/<\\/td>/gi, ' ')\n      .replace(/<[^>]+>/g, '')\n  ).replace(/[ \\t]{2,}/g, ' ').trim();\n}\n\nfunction extractFromPayload(payload) {\n  if (!payload) return '';\n  let plain = '', html = '';\n  function walk(node) {\n    if (!node) return;\n    const mime = (node.mimeType || '').toLowerCase();\n    const data = node.body && node.body.data ? node.body.data : null;\n    if (data) {\n      const decoded = Buffer.from(data, 'base64').toString('utf-8');\n      if (mime === 'text/plain') plain = plain || decoded;\n      if (mime === 'text/html')  html  = html  || decoded;\n    }\n    if (node.parts) node.parts.forEach(walk);\n  }\n  walk(payload);\n  return plain ? decodeEntities(plain) : stripHtml(html);\n}\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const subject = item.json.subject || '';\n\n  let body = '';\n  if (item.json.text && item.json.text.trim())       body = decodeEntities(item.json.text);\n  else if (item.json.html && item.json.html.trim())  body = stripHtml(item.json.html);\n  else if (item.json.payload)                        body = extractFromPayload(item.json.payload);\n  else                                               body = decodeEntities(item.json.snippet || '');\n\n  const content = subject + '\\n' + body;\n\n  const emailYear = item.json.date\n    ? new Date(item.json.date).getFullYear()\n    : new Date().getFullYear();\n\n  // ── Amount ──────────────────────────────────────────────────────────────\n  let amount = null;\n  const amtPatterns = [\n    /(?:SGD|S\\$)\\s*([\\d,]+\\.\\d{2})/i,\n    /(?:SGD|S\\$)\\s*([\\d,]+)/i,\n    /amount[:\\s]+(?:SGD|S\\$)?\\s*([\\d,]+\\.?\\d*)/i,\n    /of\\s+(?:SGD|S\\$)\\s*([\\d,]+\\.?\\d*)/i,\n    /(?:debit|credit)(?:ed)?[^\\d]{0,20}([\\d,]+\\.\\d{2})/i,\n  ];\n  for (const re of amtPatterns) {\n    const m = content.match(re);\n    if (m) { amount = parseFloat(m[1].replace(/,/g, '')); break; }\n  }\n\n  // ── Date ────────────────────────────────────────────────────────────────\n  let txnDate = null;\n  const datePatterns = [\n    /(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?\\s+\\d{4})/i,\n    /Date\\s*[&]?\\s*Time\\s*:\\s*(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{1,2}:\\d{2})?/i,\n    /Date\\s*:\\s*(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{4})?/i,\n    /dated?\\s+(\\d{1,2}\\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\.?)(?:\\s+\\d{4})?/i,\n    /(\\d{2}[\\/-]\\d{2}[\\/-]\\d{4})/,\n    /(\\d{4}-\\d{2}-\\d{2})/,\n  ];\n  for (const re of datePatterns) {\n    const m = content.match(re);\n    if (m) {\n      let d = m[1].trim();\n      if (!/\\d{4}/.test(d)) d = d + ' ' + emailYear;\n      txnDate = d;\n      break;\n    }\n  }\n\n  // ── To ──────────────────────────────────────────────────────────────────\n  let toRecipient = null;\n  const toPatterns = [\n    /\\bTo:\\s+(?!view\\b)([^\\n\\r]+)/i,\n    /From:[^\\n\\r]+[\\n\\r]+\\s*To:\\s*([^\\n\\r]+)/i,\n    /\\bTo:\\s{2,}([^\\n\\r]+)/,\n  ];\n  for (const re of toPatterns) {\n    const m = content.match(re);\n    if (m && m[1] && m[1].trim().length > 1) {\n      toRecipient = m[1].trim();\n      break;\n    }\n  }\n\n  results.push({\n    json: {\n      emailId:      item.json.id,\n      subject,\n      from:         item.json.from,\n      emailDate:    item.json.date,\n      amount,\n      currency:     'SGD',\n      txnDate,\n      to:           toRecipient,\n      extractionOk: !!(amount && txnDate),\n      _debug: {\n        amountFound: amount      !== null,\n        dateFound:   txnDate     !== null,\n        toFound:     toRecipient !== null,\n        bodySource:  item.json.text ? 'text' : item.json.html ? 'html' : item.json.payload ? 'payload' : 'snippet',\n        bodyPreview: body.substring(0, 600)\n      }\n    }\n  });\n}\n\nreturn results;\n"
       },
-      "id": "d9055702-cc00-4f34-a76b-e2e99fe3d20e",
+      "id": "efd2266f-0cd4-4990-b7a2-b7ed12d48708",
       "name": "Extract Amount and Date",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-592, 96]
+      "position": [160, 160]
     },
     {
       "parameters": {
@@ -56,11 +56,11 @@
         },
         "options": {}
       },
-      "id": "7d0a78c6-5cc6-4e6b-ba81-a07ebf5b6d71",
+      "id": "b31b3cc4-9104-448f-b029-8920d797c8b4",
       "name": "Both Fields Found?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [-320, 96]
+      "position": [432, 160]
     },
     {
       "parameters": {
@@ -76,11 +76,11 @@
         },
         "options": {}
       },
-      "id": "c524d990-c569-448a-b9b2-047c6bfaa42b",
+      "id": "91dfaddb-d6ef-4d5a-951d-d25f8aa7480d",
       "name": "Format Output",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-64, -16]
+      "position": [688, 48]
     },
     {
       "parameters": {
@@ -96,11 +96,11 @@
         },
         "options": {}
       },
-      "id": "667feca9-3cf5-4e41-8131-0c953f3ae633",
+      "id": "a8f8a5b4-4663-4534-b15d-2f8ab8e3fa8a",
       "name": "Flag Incomplete",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-64, 224]
+      "position": [688, 288]
     },
     {
       "parameters": {
@@ -136,8 +136,8 @@
       },
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.7,
-      "position": [144, -16],
-      "id": "16e8546a-067b-410c-a3be-98a1ac57c73c",
+      "position": [896, 48],
+      "id": "1246a0a9-c461-4a9a-a136-2027eb51d182",
       "name": "Append row in sheet",
       "credentials": {
         "googleSheetsOAuth2Api": {
@@ -161,8 +161,8 @@
   },
   "active": false,
   "settings": { "executionOrder": "v1", "binaryMode": "separate" },
-  "versionId": "44fea718-1961-4c9d-8f83-b62fcdc1b937",
+  "versionId": "aa186236-68b7-4b9a-9ca0-e22041f007ad",
   "meta": { "instanceId": "edac016de2d10c4a0c3e12f0f0f96a0f36a3b4ae225409676e0eb05f8eb41252" },
-  "id": "SoTxSPzyZSK1zIZ4",
+  "id": "A3kSBtfE80SJE7B5",
   "tags": []
 }
