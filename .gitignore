@@ -1,5 +1,2 @@
-credentials.json
-token.json
-expense_automation.log
 __pycache__/
 *.pyc

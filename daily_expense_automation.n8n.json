@@ -1,0 +1,220 @@
+{
+  "name": "Daily Email Expense Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 * * *"
+            }
+          ]
+        }
+      },
+      "id": "node-schedule",
+      "name": "Every Day 8PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": true,
+        "filters": {
+          "sender": "iBanking.alert@dbs.com",
+          "readStatus": "both",
+          "receivedAfter": "={{ $now.startOf('day').toISO() }}"
+        },
+        "options": {
+          "format": "resolved"
+        }
+      },
+      "id": "node-gmail",
+      "name": "Get DBS Emails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail (kianhimn8na@gmail.com)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Parse each DBS iBanking email ────────────────────────────────────────\nconst BIG_THRESHOLD = 25;\n\nconst results = [];\n\nfor (const item of $input.all()) {\n  const body = item.json.text || item.json.snippet || '';\n  const subject = item.json.subject || '';\n  const fullText = subject + ' ' + body;\n\n  // Amount: SGD 120.50 or S$120.50\n  const amountMatch = fullText.match(/(?:SGD|S\\$)\\s*([\\d,]+\\.\\d{2})/i);\n  if (!amountMatch) continue;\n  const amount = parseFloat(amountMatch[1].replace(/,/g, ''));\n\n  // Payee\n  const payeeMatch = fullText.match(\n    /(?:paid?\\s+to|payment(?:\\s+was)?\\s+made\\s+to|transferred?\\s+to|credited?\\s+to)\\s+([^\\n,\\.]+)/i\n  );\n  const payee = payeeMatch ? payeeMatch[1].trim() : 'Unknown';\n\n  // Date — prefer body date, fall back to email date header\n  const months = 'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec';\n  const dateMatch = fullText.match(new RegExp(`(\\\\d{1,2}\\\\s+(?:${months})\\\\s+\\\\d{4})`, 'i'));\n  let txDate;\n  if (dateMatch) {\n    txDate = new Date(dateMatch[1]);\n  } else {\n    txDate = new Date(item.json.date);\n  }\n  const dateStr = txDate.toISOString().slice(0, 10);\n\n  // Time\n  const timeMatch = fullText.match(/(\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\s*[AP]M)?)/i);\n  const timeStr = timeMatch\n    ? timeMatch[1].trim()\n    : txDate.toTimeString().slice(0, 5);\n\n  // Direction\n  const isIncoming = /\\b(credit|received|deposit)\\b/i.test(fullText);\n  const direction = isIncoming ? 'in' : 'out';\n\n  results.push({\n    json: {\n      date: dateStr,\n      time: timeStr,\n      amount,\n      payee,\n      direction\n    }\n  });\n}\n\nif (results.length === 0) {\n  // Pass a sentinel so downstream nodes still run and write an empty report\n  results.push({ json: { _empty: true, date: new Date().toISOString().slice(0, 10) } });\n}\n\nreturn results;"
+      },
+      "id": "node-parse",
+      "name": "Parse Transactions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── Aggregate all parsed transactions ────────────────────────────────────\nconst BIG_THRESHOLD = 25;\n\nconst allItems = $input.all();\n\n// Filter out the empty sentinel\nconst transactions = allItems.filter(i => !i.json._empty);\n\nif (transactions.length === 0) {\n  return [{ json: { detailRows: [], summaryRows: [], runDate: new Date().toISOString().slice(0, 10), empty: true } }];\n}\n\nconst payeeTotals = {};\nconst detailRows = [];\n\nfor (const item of transactions) {\n  const { date, time, amount, payee, direction } = item.json;\n\n  const bigIn  = direction === 'in'  && amount > BIG_THRESHOLD ? amount : '';\n  const bigOut = direction === 'out' && amount > BIG_THRESHOLD ? amount : '';\n\n  detailRows.push([date, time, amount, payee, bigIn, bigOut]);\n\n  if (!payeeTotals[payee]) payeeTotals[payee] = { in: 0, out: 0 };\n  payeeTotals[payee][direction] += amount;\n}\n\nconst summaryRows = Object.entries(payeeTotals)\n  .sort(([a], [b]) => a.localeCompare(b))\n  .map(([payee, t]) => [payee, Math.round(t.in * 100) / 100, Math.round(t.out * 100) / 100]);\n\nconst runDate = new Date().toISOString().slice(0, 10);\n\nreturn [{ json: { detailRows, summaryRows, runDate, empty: false } }];"
+      },
+      "id": "node-aggregate",
+      "name": "Group & Categorise",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten detailRows into individual items for the Sheets append node\nconst { detailRows, runDate } = $input.first().json;\n\nif (!detailRows || detailRows.length === 0) {\n  return [{ json: { _sheetTab: runDate, _row: ['No transactions today', '', '', '', '', ''] } }];\n}\n\nreturn detailRows.map(row => ({\n  json: {\n    _sheetTab: runDate,\n    Date:    row[0],\n    Time:    row[1],\n    Amount:  row[2],\n    Payee:   row[3],\n    'Big In':  row[4],\n    'Big Out': row[5]\n  }\n}));"
+      },
+      "id": "node-flatten-detail",
+      "name": "Flatten Detail Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten summaryRows into individual items for the master_payee_list sheet\nconst { summaryRows } = $input.first().json;\n\nif (!summaryRows || summaryRows.length === 0) {\n  return [{ json: { Payee: '', 'Total In': 0, 'Total Out': 0 } }];\n}\n\nreturn summaryRows.map(row => ({\n  json: {\n    Payee:       row[0],\n    'Total In':  row[1],\n    'Total Out': row[2]\n  }\n}));"
+      },
+      "id": "node-flatten-summary",
+      "name": "Flatten Summary Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 420]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "mode": "name",
+          "value": "daily_expenses_claude"
+        },
+        "sheetName": {
+          "mode": "expression",
+          "value": "={{ $json._sheetTab }}"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date":     "={{ $json.Date }}",
+            "Time":     "={{ $json.Time }}",
+            "Amount":   "={{ $json.Amount }}",
+            "Payee":    "={{ $json.Payee }}",
+            "Big In":   "={{ $json['Big In'] }}",
+            "Big Out":  "={{ $json['Big Out'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Date",    "displayName": "Date",    "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string", "removed": false },
+            { "id": "Time",    "displayName": "Time",    "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string", "removed": false },
+            { "id": "Amount",  "displayName": "Amount",  "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number", "removed": false },
+            { "id": "Payee",   "displayName": "Payee",   "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "string", "removed": false },
+            { "id": "Big In",  "displayName": "Big In",  "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number", "removed": false },
+            { "id": "Big Out", "displayName": "Big Out", "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number", "removed": false }
+          ]
+        },
+        "options": {
+          "headerRow": true
+        }
+      },
+      "id": "node-sheets-daily",
+      "name": "Write Daily Tab",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1340, 200],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets (kianhimn8na)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "mode": "name",
+          "value": "daily_expenses_claude"
+        },
+        "sheetName": {
+          "mode": "name",
+          "value": "master_payee_list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Payee":      "={{ $json.Payee }}",
+            "Total In":   "={{ $json['Total In'] }}",
+            "Total Out":  "={{ $json['Total Out'] }}"
+          },
+          "matchingColumns": ["Payee"],
+          "schema": [
+            { "id": "Payee",     "displayName": "Payee",     "required": false, "defaultMatch": true,  "canBeUsedToMatch": true, "display": true, "type": "string", "removed": false },
+            { "id": "Total In",  "displayName": "Total In",  "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number", "removed": false },
+            { "id": "Total Out", "displayName": "Total Out", "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "display": true, "type": "number", "removed": false }
+          ]
+        },
+        "options": {
+          "headerRow": true
+        }
+      },
+      "id": "node-sheets-master",
+      "name": "Upsert Master Payee List",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1340, 420],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_SHEETS_CREDENTIAL_ID",
+          "name": "Google Sheets (kianhimn8na)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Day 8PM": {
+      "main": [
+        [{ "node": "Get DBS Emails", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get DBS Emails": {
+      "main": [
+        [{ "node": "Parse Transactions", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Transactions": {
+      "main": [
+        [{ "node": "Group & Categorise", "type": "main", "index": 0 }]
+      ]
+    },
+    "Group & Categorise": {
+      "main": [
+        [
+          { "node": "Flatten Detail Rows",  "type": "main", "index": 0 },
+          { "node": "Flatten Summary Rows", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Flatten Detail Rows": {
+      "main": [
+        [{ "node": "Write Daily Tab", "type": "main", "index": 0 }]
+      ]
+    },
+    "Flatten Summary Rows": {
+      "main": [
+        [{ "node": "Upsert Master Payee List", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": ""
+  },
+  "tags": ["expenses", "dbs", "gmail", "sheets"]
+}
