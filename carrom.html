@@ -1,0 +1,808 @@
+<title>Carrom Club</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-screen game table — scoreboard, square board, striker rail, controls stacked in a narrow column. */
+:root {
+  --bg: #12201e;          /* deep table-felt teal */
+  --panel: #1b2d2a;
+  --line: #2c4440;
+  --fg: #eef3ef;
+  --muted: #9db3ad;
+  --brass: #d6ad55;       /* accent */
+  --ivory: #f1e6cc;
+  --ebony: #2b1d17;
+  --queen: #c9303a;
+  --font-display: "Sora", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.app {
+  height: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+h1 span { color: var(--brass); }
+.seg { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.seg button {
+  font: 600 0.78rem var(--font-body);
+  color: var(--muted);
+  background: none; border: 0; border-radius: 999px;
+  padding: 6px 12px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--brass); color: #1b1407; }
+.score { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.player {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  min-width: 0;
+  transition: border-color .2s, box-shadow .2s;
+}
+.player.active { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass) inset; }
+.chip { width: 26px; height: 26px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 3px rgba(0,0,0,.18), inset 0 0 0 7px rgba(255,255,255,.12); }
+.chip.white { background: var(--ivory); }
+.chip.black { background: var(--ebony); box-shadow: inset 0 0 0 3px rgba(255,255,255,.12), inset 0 0 0 7px rgba(255,255,255,.06); }
+.pinfo { min-width: 0; flex: 1; }
+.pname { font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcount { font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.qbadge { width: 14px; height: 14px; border-radius: 50%; background: var(--queen); flex: none; opacity: .15; transition: opacity .2s; }
+.qbadge.on { opacity: 1; box-shadow: 0 0 0 2px rgba(201,48,58,.35); }
+.status {
+  min-height: 1.3em;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+  text-wrap: balance;
+}
+.status b { color: var(--fg); font-weight: 600; }
+.status.alert b { color: #f08a7e; }
+.status.good b { color: var(--brass); }
+.boardwrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+canvas { display: block; touch-action: none; border-radius: 14px; box-shadow: 0 18px 40px rgba(0,0,0,.45); }
+.overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.card {
+  background: rgba(18,32,30,.94);
+  border: 1px solid var(--brass);
+  border-radius: 16px;
+  padding: 22px 26px;
+  text-align: center;
+  display: flex; flex-direction: column; gap: 10px; align-items: center;
+  max-width: 80%;
+}
+.card h2 { font-family: var(--font-display); margin: 0; font-size: 1.5rem; }
+.card p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.rail { display: flex; align-items: center; gap: 12px; }
+.rail label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); flex: none; }
+input[type=range] { flex: 1; min-width: 0; accent-color: var(--brass); height: 28px; }
+.bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+.btn {
+  font: 600 0.85rem var(--font-body);
+  background: var(--panel); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 14px; cursor: pointer;
+  white-space: nowrap;
+}
+.btn.primary { background: var(--brass); color: #1b1407; border-color: var(--brass); }
+.btn:focus-visible, .seg button:focus-visible, input:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.hint { font-size: 0.72rem; color: var(--muted); text-align: right; }
+@media (prefers-reduced-motion: reduce) { .player { transition: none; } }
+</style>
+
+<div class="app">
+  <div class="top">
+    <h1>Carrom <span>Club</span></h1>
+    <div class="seg" role="group" aria-label="Opponent">
+      <button id="modeAi" aria-pressed="true">vs Computer</button>
+      <button id="modePvp" aria-pressed="false">2 Players</button>
+    </div>
+  </div>
+
+  <div class="score">
+    <div class="player" id="p0">
+      <div class="chip white"></div>
+      <div class="pinfo"><div class="pname" id="p0name">You</div><div class="pcount" id="p0count">0 / 9 pocketed</div></div>
+      <div class="qbadge" id="p0q" title="Queen covered"></div>
+    </div>
+    <div class="player" id="p1">
+      <div class="chip black"></div>
+      <div class="pinfo"><div class="pname" id="p1name">Computer</div><div class="pcount" id="p1count">0 / 9 pocketed</div></div>
+      <div class="qbadge" id="p1q" title="Queen covered"></div>
+    </div>
+  </div>
+
+  <div class="status" id="status"><b>Your break.</b> Slide the striker, then pull back from it and release.</div>
+
+  <div class="boardwrap" id="wrap">
+    <canvas id="cv" aria-label="Carrom board"></canvas>
+    <div class="overlay" id="over" hidden>
+      <div class="card">
+        <h2 id="overTitle">You win</h2>
+        <p id="overText"></p>
+        <button class="btn primary" id="again">Play again</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="rail">
+    <label for="slider">Striker</label>
+    <input type="range" id="slider" min="0" max="1000" value="500">
+  </div>
+  <div class="bar">
+    <button class="btn" id="newGame">New game</button>
+    <button class="btn" id="sound" aria-pressed="true">Sound on</button>
+    <div class="hint">Pocket your coins, then the queen and cover it.</div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+// ---------- constants (board units) ----------
+const S = 1000, F = 64, T = S + 2 * F;
+const RC = 20, RS = 26, MC = 1, MS = 2.3;
+const POCKETS = [[38, 38], [S - 38, 38], [38, S - 38], [S - 38, S - 38]];
+const POCKET_R = 40, CAPTURE = 33;
+const BASE_Y = [S - 150, 150];
+const XMIN = 232, XMAX = S - 232;
+const MAXV = 2800, DT = 1 / 240;
+const E_BALL = 0.9, E_WALL = 0.72, MU = 360, DAMP = 0.55;
+
+// ---------- state ----------
+let bodies = [], striker, players, turn, phase, queenPending, queenOwner, shotPocketed, mode = 'ai';
+let aim = null, drag = null, aiAnim = null, acc = 0, impactAcc = 0, soundOn = true;
+try { const m = localStorage.getItem('carrom-mode'); if (m === 'pvp' || m === 'ai') mode = m; } catch (e) {}
+
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ctx = cv.getContext('2d');
+const boardCv = document.createElement('canvas');
+let scale = 1, dpr = 1, cssSize = 300;
+
+function makeBody(kind, x, y) {
+  const s = kind === 'striker';
+  return { kind, x, y, vx: 0, vy: 0, r: s ? RS : RC, m: s ? MS : MC, on: true, sink: null };
+}
+
+function newGame() {
+  bodies = [];
+  striker = makeBody('striker', 500, BASE_Y[0]);
+  bodies.push(striker);
+  const c = S / 2, d1 = 2 * RC + 1.2;
+  bodies.push(makeBody('queen', c, c));
+  for (let k = 0; k < 6; k++) {
+    const a = (k * 60 + 30) * Math.PI / 180;
+    const kind = k % 2 ? 'black' : 'white';
+    bodies.push(makeBody(kind, c + Math.cos(a) * d1, c + Math.sin(a) * d1));
+    bodies.push(makeBody(kind, c + Math.cos(a) * d1 * 2, c + Math.sin(a) * d1 * 2));
+    const b = k * 60 * Math.PI / 180, dd = d1 * Math.sqrt(3);
+    bodies.push(makeBody(k % 2 ? 'white' : 'black', c + Math.cos(b) * dd, c + Math.sin(b) * dd));
+  }
+  players = [
+    { color: 'white', name: mode === 'ai' ? 'You' : 'Player 1', ai: false },
+    { color: 'black', name: mode === 'ai' ? 'Computer' : 'Player 2', ai: mode === 'ai' },
+  ];
+  turn = 0; queenPending = null; queenOwner = null; aim = null; drag = null; aiAnim = null;
+  $('over').hidden = true;
+  startTurn(true);
+  setStatus(mode === 'ai' ? '<b>Your break.</b> Slide the striker, then pull back from it and release.'
+    : '<b>Player 1 breaks.</b> Slide the striker, then pull back from it and release.');
+}
+
+function remaining(color) { return bodies.filter(b => b.kind === color && b.on).length; }
+
+// ---------- physics (shared by game and AI simulation) ----------
+function step(bs, dt, ev) {
+  let moving = false;
+  const n = bs.length;
+  for (let i = 0; i < n; i++) {
+    const b = bs[i];
+    if (!b.on || (b.vx === 0 && b.vy === 0)) continue;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+  }
+  for (let i = 0; i < n; i++) {
+    const a = bs[i]; if (!a.on) continue;
+    for (let j = i + 1; j < n; j++) {
+      const b = bs[j]; if (!b.on) continue;
+      const dx = b.x - a.x, dy = b.y - a.y, rr = a.r + b.r;
+      if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= rr * rr || d2 === 0) continue;
+      const d = Math.sqrt(d2), nx = dx / d, ny = dy / d;
+      const im = 1 / a.m + 1 / b.m, ov = rr - d;
+      a.x -= nx * ov * (1 / a.m) / im; a.y -= ny * ov * (1 / a.m) / im;
+      b.x += nx * ov * (1 / b.m) / im; b.y += ny * ov * (1 / b.m) / im;
+      const vr = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+      if (vr < 0) {
+        const J = -(1 + E_BALL) * vr / im;
+        a.vx -= J * nx / a.m; a.vy -= J * ny / a.m;
+        b.vx += J * nx / b.m; b.vy += J * ny / b.m;
+        if (ev) ev.impact = Math.max(ev.impact, -vr);
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const b = bs[i]; if (!b.on) continue;
+    const r = b.r;
+    if (b.x < r) { b.x = r; if (b.vx < 0) { if (ev) ev.wall = Math.max(ev.wall, -b.vx); b.vx = -b.vx * E_WALL; } }
+    else if (b.x > S - r) { b.x = S - r; if (b.vx > 0) { if (ev) ev.wall = Math.max(ev.wall, b.vx); b.vx = -b.vx * E_WALL; } }
+    if (b.y < r) { b.y = r; if (b.vy < 0) { if (ev) ev.wall = Math.max(ev.wall, -b.vy); b.vy = -b.vy * E_WALL; } }
+    else if (b.y > S - r) { b.y = S - r; if (b.vy > 0) { if (ev) ev.wall = Math.max(ev.wall, b.vy); b.vy = -b.vy * E_WALL; } }
+    for (const p of POCKETS) {
+      const dx = b.x - p[0], dy = b.y - p[1];
+      if (dx * dx + dy * dy < CAPTURE * CAPTURE) {
+        b.on = false;
+        if (ev) { ev.pocketed.push(b); b.sink = { x0: b.x, y0: b.y, px: p[0], py: p[1], t: 0 }; }
+        else b.pk = true;
+        b.vx = b.vy = 0;
+        break;
+      }
+    }
+    if (!b.on) continue;
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp > 0) {
+      const ns = sp - (MU + DAMP * sp) * dt;
+      if (ns <= 2) { b.vx = b.vy = 0; }
+      else { const f = ns / sp; b.vx *= f; b.vy *= f; moving = true; }
+    }
+  }
+  return moving;
+}
+
+function overlapsAny(x, y, r, skip) {
+  for (const b of bodies) {
+    if (!b.on || b === skip) continue;
+    if (Math.hypot(b.x - x, b.y - y) < b.r + r - 0.5) return true;
+  }
+  return false;
+}
+
+function placeAtCentre(b) {
+  b.vx = b.vy = 0; b.sink = null;
+  for (let ring = 0; ring < 12; ring++) {
+    const rad = ring * RC * 1.15, steps = ring === 0 ? 1 : 6 * ring;
+    for (let k = 0; k < steps; k++) {
+      const a = k / steps * Math.PI * 2 + ring;
+      const x = S / 2 + Math.cos(a) * rad, y = S / 2 + Math.sin(a) * rad;
+      if (!overlapsAny(x, y, b.r, b)) { b.x = x; b.y = y; b.on = true; return; }
+    }
+  }
+  b.x = S / 2; b.y = S / 2; b.on = true;
+}
+
+// ---------- turn flow ----------
+function strikerValid() { return !overlapsAny(striker.x, striker.y, RS, striker); }
+
+function startTurn(fresh) {
+  striker.on = true; striker.sink = null; striker.vx = striker.vy = 0;
+  striker.y = BASE_Y[turn];
+  let x = fresh ? 500 : striker.x;
+  if (x < XMIN || x > XMAX) x = 500;
+  striker.x = x;
+  if (!strikerValid()) {
+    for (let k = 0; k <= 40; k++) {
+      for (const sgn of [1, -1]) {
+        const tx = 500 + sgn * k * 14;
+        if (tx < XMIN || tx > XMAX) continue;
+        striker.x = tx;
+        if (strikerValid()) { k = 99; break; }
+      }
+    }
+  }
+  syncSlider();
+  phase = 'aim';
+  updateHud();
+  if (players[turn].ai) {
+    phase = 'ai';
+    setTimeout(aiTurn, 650);
+  }
+}
+
+function shoot(dx, dy, power) {
+  const len = Math.hypot(dx, dy) || 1;
+  const v = 140 + power * (MAXV - 140);
+  striker.vx = dx / len * v; striker.vy = dy / len * v;
+  shotPocketed = [];
+  phase = 'moving'; aim = null; acc = 0;
+  playClick(Math.min(1, power + 0.2), 900);
+}
+
+function resolveShot() {
+  const me = players[turn].color, opp = me === 'white' ? 'black' : 'white';
+  const p = shotPocketed;
+  const strikerIn = p.some(b => b.kind === 'striker');
+  const ownIn = p.filter(b => b.kind === me).length;
+  const oppIn = p.filter(b => b.kind === opp).length;
+  const queen = bodies.find(b => b.kind === 'queen');
+  const queenIn = p.includes(queen);
+  let keep = false, msg = '', tone = '';
+  const who = players[turn].ai ? 'Computer' : (mode === 'ai' ? 'You' : players[turn].name);
+
+  if (strikerIn) {
+    p.filter(b => b.kind === me).forEach(placeAtCentre);
+    if (queenIn || queenPending === turn) placeAtCentre(queen);
+    queenPending = null;
+    const due = bodies.find(b => b.kind === me && !b.on);
+    if (due) placeAtCentre(due);
+    msg = `<b>Foul.</b> Striker pocketed${due ? ', one coin due back to the centre' : ''}.`;
+    tone = 'alert';
+  } else {
+    if (queenPending === turn && !queenIn) {
+      if (ownIn > 0) { queenOwner = turn; msg = '<b>Queen covered!</b> '; tone = 'good'; }
+      else { placeAtCentre(queen); msg = '<b>Queen not covered</b>, back to the centre. '; tone = 'alert'; }
+      queenPending = null;
+    }
+    if (queenIn) {
+      if (ownIn > 0) { queenOwner = turn; msg += '<b>Queen pocketed and covered!</b> '; tone = 'good'; }
+      else { queenPending = turn; msg += '<b>Queen pocketed.</b> Cover it with your next coin. '; tone = 'good'; }
+    }
+    keep = ownIn > 0 || queenIn;
+    if (!msg) {
+      if (ownIn > 0) msg = `<b>${ownIn > 1 ? ownIn + ' coins' : 'Coin'} in.</b> ${who === 'You' ? 'Shoot again.' : who + ' shoots again.'}`;
+      else if (oppIn > 0) msg = `<b>${oppIn} for the other side.</b>`;
+    }
+  }
+  // the queen must be pocketed and covered before a player's last coin
+  for (const color of ['white', 'black']) {
+    if (remaining(color) === 0 && queenOwner === null && queenPending === null) {
+      const back = bodies.find(b => b.kind === color && !b.on);
+      placeAtCentre(back);
+      if (color === me) keep = false;
+      msg = '<b>Queen first.</b> Your last coin goes back until the queen is covered.'; tone = 'alert';
+    }
+  }
+  updateHud();
+  for (let i = 0; i < 2; i++) {
+    if (remaining(players[i].color) === 0 && queenOwner !== null) return gameOver(i);
+  }
+  if (!keep) turn = 1 - turn;
+  const next = players[turn];
+  const tail = next.ai ? 'Computer to shoot.' : (mode === 'ai' ? 'Your shot.' : `${next.name} (${next.color}) to shoot.`);
+  setStatus((msg ? msg + ' ' : '') + (keep ? '' : tail), tone);
+  startTurn(false);
+}
+
+function gameOver(winner) {
+  phase = 'over';
+  const w = players[winner], l = players[1 - winner];
+  const pts = remaining(l.color) + (queenOwner === winner ? 3 : 0);
+  $('overTitle').textContent = mode === 'ai' ? (winner === 0 ? 'You win the board' : 'Computer wins the board') : `${w.name} wins`;
+  $('overText').textContent = `${pts} point${pts === 1 ? '' : 's'}: ${remaining(l.color)} coins left on the board` + (queenOwner === winner ? ' + 3 for the queen.' : '.');
+  $('over').hidden = false;
+  setStatus('<b>Board finished.</b>', 'good');
+  updateHud();
+}
+
+// ---------- computer player ----------
+function clone(bs) { return bs.map(b => ({ kind: b.kind, x: b.x, y: b.y, vx: 0, vy: 0, r: b.r, m: b.m, on: b.on })); }
+
+function simulate(x, dx, dy, power) {
+  const bs = clone(bodies);
+  const st = bs[0]; st.x = x; st.y = BASE_Y[turn];
+  const len = Math.hypot(dx, dy), v = 140 + power * (MAXV - 140);
+  st.vx = dx / len * v; st.vy = dy / len * v;
+  for (let i = 0; i < 2400; i++) if (!step(bs, DT, null)) break;
+  return bs;
+}
+
+function scoreResult(bs) {
+  const me = players[turn].color, opp = me === 'white' ? 'black' : 'white';
+  let s = 0, own = 0;
+  for (let i = 0; i < bs.length; i++) {
+    const b = bs[i]; if (!b.pk) continue;
+    if (b.kind === 'striker') s -= 250;
+    else if (b.kind === me) { s += 100; own++; }
+    else if (b.kind === opp) s -= 70;
+    else if (b.kind === 'queen') s += 60;
+  }
+  if (bs[0].pk) return s;
+  // small bonus for leaving own coins near pockets
+  for (const b of bs) {
+    if (b.kind !== me || !b.on) continue;
+    let dmin = 1e9;
+    for (const p of POCKETS) dmin = Math.min(dmin, Math.hypot(b.x - p[0], b.y - p[1]));
+    s += Math.max(0, 200 - dmin) / 40;
+  }
+  return s;
+}
+
+function aiTurn() {
+  if (phase !== 'ai') return;
+  const me = players[turn].color, by = BASE_Y[turn];
+  const targets = bodies.filter(b => b.on && (b.kind === me || (b.kind === 'queen' && remaining(me) < 9)));
+  const cands = [];
+  for (let x = XMIN; x <= XMAX; x += 27) {
+    if (overlapsAny(x, by, RS, striker)) continue;
+    for (const c of targets) for (const p of POCKETS) {
+      let ux = p[0] - c.x, uy = p[1] - c.y; const lcp = Math.hypot(ux, uy); ux /= lcp; uy /= lcp;
+      const gx = c.x - ux * (RC + RS), gy = c.y - uy * (RC + RS);
+      let sx = gx - x, sy = gy - by; const lsg = Math.hypot(sx, sy);
+      const cut = (sx * ux + sy * uy) / lsg;
+      if (cut < 0.35) continue;
+      const blocked = pathBlocked(x, by, gx, gy, RS, c) + pathBlocked(c.x, c.y, p[0], p[1], RC, c);
+      const h = cut * 2 - (lsg + lcp) / 1400 - blocked * 1.2;
+      const need = Math.min(1, ((lsg + lcp / Math.max(cut, 0.4)) / 1500) + 0.18);
+      cands.push({ x, dx: sx, dy: sy, h, need });
+    }
+  }
+  cands.sort((a, b) => b.h - a.h);
+  const tries = [];
+  for (const c of cands.slice(0, 20)) for (const f of [0.8, 1.05, 1.35]) tries.push({ x: c.x, dx: c.dx, dy: c.dy, power: Math.min(1, c.need * f) });
+  for (let i = 0; i < 12; i++) {
+    const x = XMIN + Math.random() * (XMAX - XMIN);
+    if (overlapsAny(x, by, RS, striker)) continue;
+    const t = targets[Math.floor(Math.random() * targets.length)] || { x: 500, y: 500 };
+    tries.push({ x, dx: t.x - x, dy: t.y - by, power: 0.5 + Math.random() * 0.5 });
+  }
+  if (!tries.length) tries.push({ x: 500, dx: 0, dy: 500 - by, power: 0.8 });
+  let best = null, bestS = -1e9;
+  for (const t of tries) {
+    const s = scoreResult(simulate(t.x, t.dx, t.dy, t.power)) + Math.random() * 3;
+    if (s > bestS) { bestS = s; best = t; }
+  }
+  // human-like error
+  const ang = Math.atan2(best.dy, best.dx) + gauss() * 0.019;
+  const power = Math.max(0.05, Math.min(1, best.power * (1 + gauss() * 0.07)));
+  aiAnim = { x0: striker.x, x1: best.x, t: 0, dx: Math.cos(ang), dy: Math.sin(ang), power };
+  setStatus('<b>Computer</b> is lining up a shot…');
+}
+
+function pathBlocked(x0, y0, x1, y1, r, ignore) {
+  let n = 0;
+  const dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy;
+  for (const b of bodies) {
+    if (!b.on || b === ignore || b.kind === 'striker') continue;
+    const t = Math.max(0, Math.min(1, ((b.x - x0) * dx + (b.y - y0) * dy) / L2));
+    if (Math.hypot(x0 + dx * t - b.x, y0 + dy * t - b.y) < b.r + r) n++;
+  }
+  return n;
+}
+
+function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5) * 1.4; }
+
+// ---------- input ----------
+function toBoard(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * T - F, y: (e.clientY - r.top) / r.height * T - F };
+}
+function setStrikerX(x) {
+  striker.x = Math.max(XMIN, Math.min(XMAX, x));
+  syncSlider();
+}
+function syncSlider() { $('slider').value = Math.round((striker.x - XMIN) / (XMAX - XMIN) * 1000); }
+function humanCanAct() { return phase === 'aim' && !players[turn].ai; }
+
+cv.addEventListener('pointerdown', e => {
+  unlockAudio();
+  if (!humanCanAct()) return;
+  const p = toBoard(e);
+  cv.setPointerCapture(e.pointerId);
+  if (Math.hypot(p.x - striker.x, p.y - striker.y) < RS * 2.4) { drag = 'aim'; aim = null; }
+  else if (Math.abs(p.y - BASE_Y[turn]) < 75) { drag = 'place'; setStrikerX(p.x); }
+  else { drag = 'aim'; aim = null; }
+});
+cv.addEventListener('pointermove', e => {
+  if (!drag || !humanCanAct()) return;
+  const p = toBoard(e);
+  if (drag === 'place') setStrikerX(p.x);
+  else {
+    const dx = striker.x - p.x, dy = striker.y - p.y, L = Math.hypot(dx, dy);
+    aim = L < 18 ? null : { dx, dy, power: Math.min(1, (L - 18) / 300) };
+  }
+});
+function endDrag() {
+  if (drag === 'aim' && aim && humanCanAct()) {
+    if (!strikerValid()) setStatus('<b>Striker is touching a coin.</b> Slide it to a clear spot.', 'alert');
+    else shoot(aim.dx, aim.dy, aim.power);
+  }
+  drag = null; aim = null;
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', () => { drag = null; aim = null; });
+$('slider').addEventListener('input', e => {
+  if (!humanCanAct()) { syncSlider(); return; }
+  striker.x = XMIN + e.target.value / 1000 * (XMAX - XMIN);
+});
+$('newGame').addEventListener('click', newGame);
+$('again').addEventListener('click', newGame);
+function setMode(m) {
+  mode = m;
+  try { localStorage.setItem('carrom-mode', m); } catch (e) {}
+  $('modeAi').setAttribute('aria-pressed', m === 'ai');
+  $('modePvp').setAttribute('aria-pressed', m === 'pvp');
+  newGame();
+}
+$('modeAi').addEventListener('click', () => setMode('ai'));
+$('modePvp').addEventListener('click', () => setMode('pvp'));
+$('sound').addEventListener('click', () => {
+  soundOn = !soundOn;
+  $('sound').textContent = soundOn ? 'Sound on' : 'Sound off';
+  $('sound').setAttribute('aria-pressed', soundOn);
+});
+
+// ---------- sound ----------
+let actx = null;
+function unlockAudio() {
+  if (actx) return;
+  try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
+}
+function playClick(vol, freq) {
+  if (!soundOn || !actx || vol < 0.04) return;
+  const t = actx.currentTime;
+  const len = 0.05, buf = actx.createBuffer(1, Math.floor(actx.sampleRate * len), actx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 4);
+  const src = actx.createBufferSource(); src.buffer = buf;
+  const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = 2;
+  const g = actx.createGain(); g.gain.value = Math.min(0.9, vol);
+  src.connect(bp).connect(g).connect(actx.destination);
+  src.start(t);
+}
+
+// ---------- HUD ----------
+function setStatus(html, tone) {
+  const el = $('status');
+  el.innerHTML = html;
+  el.className = 'status' + (tone ? ' ' + tone : '');
+}
+function updateHud() {
+  for (let i = 0; i < 2; i++) {
+    $('p' + i + 'name').textContent = players[i].name + (players[i].ai ? '' : '') ;
+    $('p' + i + 'count').textContent = `${9 - remaining(players[i].color)} / 9 pocketed` + (queenPending === i ? ' · cover the queen' : '');
+    $('p' + i + 'q').classList.toggle('on', queenOwner === i);
+    $('p' + i).classList.toggle('active', turn === i && phase !== 'over');
+  }
+}
+
+// ---------- rendering ----------
+function resize() {
+  const w = $('wrap');
+  const size = Math.max(200, Math.floor(Math.min(w.clientWidth, w.clientHeight)));
+  dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  cssSize = size;
+  cv.style.width = cv.style.height = size + 'px';
+  cv.width = cv.height = Math.round(size * dpr);
+  boardCv.width = boardCv.height = cv.width;
+  scale = cv.width / T;
+  drawBoard(boardCv.getContext('2d'), scale);
+}
+
+function drawBoard(g, k) {
+  g.save();
+  g.scale(k, k);
+  // frame
+  const fr = g.createLinearGradient(0, 0, T, T);
+  fr.addColorStop(0, '#6b3219'); fr.addColorStop(0.5, '#4a2010'); fr.addColorStop(1, '#5c2a14');
+  g.fillStyle = fr;
+  roundRect(g, 0, 0, T, T, 34); g.fill();
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  g.globalAlpha = 0.12; g.strokeStyle = '#1e0b04';
+  for (let i = 0; i < 40; i++) { g.lineWidth = 1 + rnd() * 2; g.beginPath(); const y = rnd() * T; g.moveTo(0, y); g.bezierCurveTo(T * .3, y + rnd() * 20 - 10, T * .6, y + rnd() * 20 - 10, T, y + rnd() * 10 - 5); g.stroke(); }
+  g.globalAlpha = 1;
+  g.fillStyle = '#2a1209'; g.fillRect(F - 8, F - 8, S + 16, S + 16);
+  g.translate(F, F);
+  // playing surface (maple ply)
+  const sf = g.createLinearGradient(0, 0, S, S);
+  sf.addColorStop(0, '#efd6a6'); sf.addColorStop(1, '#e0bb82');
+  g.fillStyle = sf; g.fillRect(0, 0, S, S);
+  g.strokeStyle = '#9b6a35';
+  for (let i = 0; i < 90; i++) {
+    g.globalAlpha = 0.04 + rnd() * 0.06; g.lineWidth = 0.6 + rnd() * 1.6;
+    const y = rnd() * S; g.beginPath(); g.moveTo(0, y);
+    for (let x = 0; x <= S; x += 50) g.lineTo(x, y + Math.sin(x / 90 + i) * 4 + rnd() * 2);
+    g.stroke();
+  }
+  g.globalAlpha = 1;
+  // markings on four sides
+  g.strokeStyle = '#3a2214'; g.lineWidth = 2.2;
+  for (let side = 0; side < 4; side++) {
+    g.save(); g.translate(S / 2, S / 2); g.rotate(side * Math.PI / 2); g.translate(-S / 2, -S / 2);
+    const y = S - 150;
+    g.beginPath(); g.moveTo(XMIN, y - RS); g.lineTo(XMAX, y - RS); g.moveTo(XMIN, y + RS); g.lineTo(XMAX, y + RS); g.stroke();
+    for (const x of [XMIN, XMAX]) {
+      g.beginPath(); g.arc(x, y, RS, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#b3261e'; g.beginPath(); g.arc(x, y, RS - 6, 0, Math.PI * 2); g.fill();
+    }
+    // corner arrow toward the centre
+    g.beginPath(); g.moveTo(S - 110, S - 110); g.lineTo(S - 330, S - 330); g.stroke();
+    g.beginPath(); g.arc(S - 300, S - 300, 34, Math.PI * 0.75 - 1.6, Math.PI * 0.75 + 1.6, true); g.stroke();
+    g.beginPath(); g.moveTo(S - 330, S - 330); g.lineTo(S - 316, S - 300); g.moveTo(S - 330, S - 330); g.lineTo(S - 300, S - 316); g.stroke();
+    g.restore();
+  }
+  // centre rosette
+  const c = S / 2;
+  g.beginPath(); g.arc(c, c, 108, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = 1.2; g.beginPath(); g.arc(c, c, 98, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = 'rgba(179,38,30,.85)';
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4;
+    g.beginPath();
+    g.moveTo(c + Math.cos(a) * 88, c + Math.sin(a) * 88);
+    g.lineTo(c + Math.cos(a + 0.22) * 30, c + Math.sin(a + 0.22) * 30);
+    g.lineTo(c + Math.cos(a - 0.22) * 30, c + Math.sin(a - 0.22) * 30);
+    g.closePath(); g.fill();
+  }
+  g.lineWidth = 2; g.beginPath(); g.arc(c, c, 24, 0, Math.PI * 2); g.stroke();
+  // pockets
+  for (const p of POCKETS) {
+    const pg = g.createRadialGradient(p[0], p[1], 4, p[0], p[1], POCKET_R);
+    pg.addColorStop(0, '#000'); pg.addColorStop(0.8, '#140804'); pg.addColorStop(1, '#3a1d0e');
+    g.fillStyle = pg; g.beginPath(); g.arc(p[0], p[1], POCKET_R, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#2a1209'; g.lineWidth = 3; g.stroke();
+  }
+  g.restore();
+}
+
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+
+function drawDisc(g, b, x, y, s) {
+  const r = b.r * s;
+  g.fillStyle = 'rgba(40,18,6,.28)';
+  g.beginPath(); g.arc(x + 2.5, y + 3.5, r, 0, Math.PI * 2); g.fill();
+  let grad = g.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  let ring = 'rgba(120,90,50,.45)';
+  if (b.kind === 'white') { grad.addColorStop(0, '#fffaf0'); grad.addColorStop(1, '#d8c49c'); }
+  else if (b.kind === 'black') { grad.addColorStop(0, '#5a4236'); grad.addColorStop(1, '#170e0a'); ring = 'rgba(255,225,190,.2)'; }
+  else if (b.kind === 'queen') { grad.addColorStop(0, '#f0606a'); grad.addColorStop(1, '#8a1820'); ring = 'rgba(255,230,200,.4)'; }
+  else { grad.addColorStop(0, '#fffdf6'); grad.addColorStop(1, '#cfc2a4'); ring = '#b3261e'; }
+  g.fillStyle = grad; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = ring; g.lineWidth = b.kind === 'striker' ? 3 : 1.6;
+  g.beginPath(); g.arc(x, y, r * .66, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, r * .3, 0, Math.PI * 2); g.stroke();
+}
+
+function rayCast(ox, oy, dx, dy) {
+  const L = Math.hypot(dx, dy); dx /= L; dy /= L;
+  let best = 1e9, hit = null;
+  for (const b of bodies) {
+    if (!b.on || b === striker) continue;
+    const R = b.r + RS, fx = ox - b.x, fy = oy - b.y;
+    const bb = fx * dx + fy * dy, cc = fx * fx + fy * fy - R * R, disc = bb * bb - cc;
+    if (disc < 0) continue;
+    const t = -bb - Math.sqrt(disc);
+    if (t > 0 && t < best) { best = t; hit = b; }
+  }
+  const walls = [];
+  if (dx > 0) walls.push((S - RS - ox) / dx); if (dx < 0) walls.push((RS - ox) / dx);
+  if (dy > 0) walls.push((S - RS - oy) / dy); if (dy < 0) walls.push((RS - oy) / dy);
+  for (const t of walls) if (t > 0 && t < best) { best = t; hit = null; }
+  return { t: best, hit, dx, dy };
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.drawImage(boardCv, 0, 0);
+  ctx.setTransform(scale, 0, 0, scale, F * scale, F * scale);
+
+  // active baseline glow
+  if (phase === 'aim' || phase === 'ai') {
+    ctx.fillStyle = 'rgba(214,173,85,.18)';
+    ctx.fillRect(XMIN, BASE_Y[turn] - RS, XMAX - XMIN, RS * 2);
+  }
+  // sinking coins
+  for (const b of bodies) {
+    if (b.on || !b.sink || b.sink.t >= 1) continue;
+    b.sink.t = Math.min(1, b.sink.t + 0.07);
+    const t = b.sink.t;
+    drawDisc(ctx, b, b.sink.x0 + (b.sink.px - b.sink.x0) * t, b.sink.y0 + (b.sink.py - b.sink.y0) * t, 1 - t * 0.7);
+  }
+  for (const b of bodies) if (b.on && b !== striker) drawDisc(ctx, b, b.x, b.y, 1);
+
+  // aim guide
+  let ad = null;
+  if (aim && humanCanAct()) ad = aim;
+  else if (aiAnim && aiAnim.t > 1) ad = { dx: aiAnim.dx, dy: aiAnim.dy, power: aiAnim.power };
+  if (ad && striker.on) {
+    const rc = rayCast(striker.x, striker.y, ad.dx, ad.dy);
+    const len = Math.min(rc.t, 1400);
+    ctx.save();
+    ctx.setLineDash([10, 9]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.moveTo(striker.x, striker.y); ctx.lineTo(striker.x + rc.dx * len, striker.y + rc.dy * len); ctx.stroke();
+    if (rc.hit) {
+      const gx = striker.x + rc.dx * len, gy = striker.y + rc.dy * len;
+      ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.7)';
+      ctx.beginPath(); ctx.arc(gx, gy, RS, 0, Math.PI * 2); ctx.stroke();
+      const nx = rc.hit.x - gx, ny = rc.hit.y - gy, nl = Math.hypot(nx, ny);
+      ctx.strokeStyle = 'rgba(214,173,85,.95)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(rc.hit.x, rc.hit.y); ctx.lineTo(rc.hit.x + nx / nl * 150, rc.hit.y + ny / nl * 150); ctx.stroke();
+    }
+    // power ring
+    const col = ad.power < 0.5 ? '#9fe0a8' : ad.power < 0.8 ? '#f2c75c' : '#f07a62';
+    ctx.setLineDash([]); ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath(); ctx.arc(striker.x, striker.y, RS + 14, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = col;
+    ctx.beginPath(); ctx.arc(striker.x, striker.y, RS + 14, -Math.PI / 2, -Math.PI / 2 + ad.power * Math.PI * 2); ctx.stroke();
+    if (aim) { // pull-back band
+      ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.35)';
+      const L = Math.hypot(ad.dx, ad.dy);
+      ctx.beginPath(); ctx.moveTo(striker.x, striker.y); ctx.lineTo(striker.x - ad.dx / L * (18 + ad.power * 300), striker.y - ad.dy / L * (18 + ad.power * 300)); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (striker.on) {
+    drawDisc(ctx, striker, striker.x, striker.y, 1);
+    if ((phase === 'aim') && !strikerValid()) {
+      ctx.strokeStyle = '#f07a62'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(striker.x, striker.y, RS + 4, 0, Math.PI * 2); ctx.stroke();
+    }
+  } else if (striker.sink && striker.sink.t < 1) {
+    striker.sink.t = Math.min(1, striker.sink.t + 0.07);
+    const t = striker.sink.t;
+    drawDisc(ctx, striker, striker.sink.x0 + (striker.sink.px - striker.sink.x0) * t, striker.sink.y0 + (striker.sink.py - striker.sink.y0) * t, 1 - t * .7);
+  }
+}
+
+// ---------- loop ----------
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (phase === 'moving') {
+    acc += dt;
+    let moving = true;
+    const ev = { pocketed: [], impact: 0, wall: 0 };
+    while (acc >= DT) {
+      moving = step(bodies, DT, ev); acc -= DT;
+      if (!moving) break;
+    }
+    if (ev.impact > 60) playClick(ev.impact / 1800, 1500);
+    if (ev.wall > 120) playClick(ev.wall / 3000, 500);
+    for (const b of ev.pocketed) { shotPocketed.push(b); playClick(0.5, 220); }
+    if (!moving) { acc = 0; resolveShot(); }
+  }
+  if (aiAnim && phase === 'ai') {
+    aiAnim.t += dt * 1.6;
+    if (aiAnim.t <= 1) {
+      const e = 1 - Math.pow(1 - aiAnim.t, 3);
+      striker.x = aiAnim.x0 + (aiAnim.x1 - aiAnim.x0) * e; syncSlider();
+    } else if (aiAnim.t > 2.3) {
+      striker.x = aiAnim.x1;
+      const a = aiAnim; aiAnim = null;
+      shoot(a.dx, a.dy, a.power);
+    }
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+
+new ResizeObserver(resize).observe($('wrap'));
+$('modeAi').setAttribute('aria-pressed', mode === 'ai');
+$('modePvp').setAttribute('aria-pressed', mode === 'pvp');
+newGame();
+resize();
+requestAnimationFrame(frame);
+window.__carrom = { get state() { return { phase, turn, queenOwner, queenPending, white: remaining('white'), black: remaining('black') }; }, shoot, bodies: () => bodies };
+})();
+</script>
