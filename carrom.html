@@ -679,11 +679,11 @@ function draw() {
     const rc = rayCast(striker.x, striker.y, ad.dx, ad.dy);
     const len = Math.min(rc.t, 1400);
     ctx.save();
-    ctx.setLineDash([10, 9]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.setLineDash([10, 9]); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.85)';
     ctx.beginPath(); ctx.moveTo(striker.x, striker.y); ctx.lineTo(striker.x + rc.dx * len, striker.y + rc.dy * len); ctx.stroke();
     if (rc.hit) {
       const gx = striker.x + rc.dx * len, gy = striker.y + rc.dy * len;
-      ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.7)';
+      ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,.75)';
       ctx.beginPath(); ctx.arc(gx, gy, RS, 0, Math.PI * 2); ctx.stroke();
       const nx = rc.hit.x - gx, ny = rc.hit.y - gy, nl = Math.hypot(nx, ny);
       ctx.strokeStyle = 'rgba(214,173,85,.95)'; ctx.lineWidth = 3;
