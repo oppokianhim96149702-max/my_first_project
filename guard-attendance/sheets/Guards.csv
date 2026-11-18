@@ -1,0 +1,3 @@
+TelegramID,Name,Phone,SiteID,ShiftStart,ShiftEnd,WorkDays,Active,Status,LastCheckIn,LastCheckInTs,Pending
+123456789,Ali Bin Ahmad,+6591234567,S1,08:00,20:00,Mon-Fri,YES,OUT,,,
+987654321,Kumar Raj,+6598765432,S1,20:00,08:00,,YES,OUT,,,

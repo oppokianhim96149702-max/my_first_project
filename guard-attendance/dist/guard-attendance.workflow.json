@@ -1,0 +1,660 @@
+{
+  "name": "Guard Attendance (Telegram + Google Sheets)",
+  "nodes": [
+    {
+      "id": "node-1",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        180
+      ],
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "webhookId": "guard-attendance-bot"
+    },
+    {
+      "id": "node-2",
+      "name": "Read Guards",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        220,
+        180
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "operation": "read",
+        "options": {}
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "node-3",
+      "name": "Read Sites",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        180
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sites",
+          "mode": "name"
+        },
+        "operation": "read",
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "node-4",
+      "name": "Process Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        180
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ================= CONFIG — edit these =================\nconst CONFIG = {\n  TIMEZONE: 'Asia/Singapore',   // IANA timezone of your sites\n  ADMIN_CHAT_ID: '',            // Telegram chat ID for admin alerts (a person or a group, groups start with -100...)\n  GRACE_MIN: 15,                // minutes after shift start before a guard counts as late / no-show\n  STRICT_GEOFENCE: true,        // true = reject check-in/out outside the site radius\n  PENDING_TTL_SEC: 300,         // guard must send location within 5 min of tapping Check In/Out\n  LOW_ACCURACY_M: 100,          // GPS accuracy worse than this gets flagged\n  FORGOT_CHECKOUT_MIN: 120,     // alert if still IN this long after the shift should have ended\n  EARLY_CHECKIN_MIN: 120,       // check-ins up to 2h before shift start count for that shift\n};\n// =======================================================\n\n// ---------- shared helpers ----------\nconst BTN = {\n  IN: '🟢 Check In',\n  OUT: '🔴 Check Out',\n  STATUS: '📋 My Status',\n  CANCEL: '❌ Cancel',\n};\n\nfunction esc(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\nfunction normId(v) {\n  return String(v ?? '').replace(/[^\\d-]/g, '');\n}\n\nfunction toNum(v) {\n  const n = parseFloat(String(v ?? '').replace(/,/g, ''));\n  return Number.isFinite(n) ? n : null;\n}\n\nfunction isActive(v) {\n  return !/^(no|n|false|0|inactive)$/i.test(String(v ?? '').trim());\n}\n\n// \"08:00\", \"8:00:00\", \"8:00 PM\", \"20.00\" -> minutes after midnight\nfunction parseHHMM(v) {\n  const m = String(v ?? '').trim().match(/^(\\d{1,2})[:.](\\d{2})(?::\\d{2})?\\s*([ap]\\.?m\\.?)?$/i);\n  if (!m) return null;\n  let h = +m[1];\n  const min = +m[2];\n  if (m[3]) {\n    const pm = /^p/i.test(m[3]);\n    if (h === 12) h = pm ? 12 : 0;\n    else if (pm) h += 12;\n  }\n  if (h > 23 || min > 59) return null;\n  return h * 60 + min;\n}\n\nfunction fmtHHMM(mins) {\n  return String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');\n}\n\nfunction localParts(tsSec, tz) {\n  const parts = new Intl.DateTimeFormat('en-GB', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit', weekday: 'short', hourCycle: 'h23',\n  }).formatToParts(new Date(tsSec * 1000));\n  const p = {};\n  for (const x of parts) p[x.type] = x.value;\n  const date = `${p.year}-${p.month}-${p.day}`;\n  const time = `${p.hour}:${p.minute}:${p.second}`;\n  return { date, time, stamp: `${date} ${time}`, minutes: +p.hour * 60 + +p.minute, weekday: p.weekday };\n}\n\nconst DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];\n// WorkDays: blank = every day; \"Mon,Wed,Fri\" or \"Mon-Fri\" or \"Sat-Mon\"\nfunction worksOn(workDays, weekday) {\n  const s = String(workDays ?? '').trim();\n  if (!s) return true;\n  const target = DAYS.indexOf(weekday.slice(0, 3));\n  for (const tok of s.split(/[,\\s]+/).filter(Boolean)) {\n    const [a, b] = tok.split('-').map(t => DAYS.findIndex(d => d.toLowerCase() === t.slice(0, 3).toLowerCase()));\n    if (a < 0) continue;\n    if (b === undefined) { if (a === target) return true; continue; }\n    if (b < 0) continue;\n    for (let i = a, n = 0; n < 7; i = (i + 1) % 7, n++) {\n      if (i === target) return true;\n      if (i === b) break;\n    }\n  }\n  return false;\n}\n\nfunction haversineM(lat1, lng1, lat2, lng2) {\n  const R = 6371000, r = x => x * Math.PI / 180;\n  const dLat = r(lat2 - lat1), dLng = r(lng2 - lng1);\n  const a = Math.sin(dLat / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(dLng / 2) ** 2;\n  return 2 * R * Math.asin(Math.sqrt(a));\n}\n\n// minutes since the most recent occurrence of `startMin` (0..1439)\nfunction minsSince(nowMin, startMin) {\n  return (nowMin - startMin + 1440) % 1440;\n}\n\nfunction shiftInfo(guard) {\n  const start = parseHHMM(guard.ShiftStart);\n  const end = parseHHMM(guard.ShiftEnd);\n  if (start === null) return null;\n  const len = end === null ? 720 : ((end - start + 1440) % 1440 || 1440);\n  return { start, end: end === null ? (start + len) % 1440 : end, len };\n}\n\nfunction cleanRows(rows) {\n  return (rows || []).filter(r => r && Object.keys(r).some(k => k !== 'row_number' && String(r[k] ?? '').trim() !== ''));\n}\n\nfunction supervisorsFor(site, cfg) {\n  const ids = [normId(site && site.SupervisorChatID), normId(cfg.ADMIN_CHAT_ID)].filter(Boolean);\n  return [...new Set(ids)];\n}\n\n// ---------- main: handle one Telegram update ----------\nfunction processMessage(update, guardRows, siteRows, nowSec, cfg) {\n  const msg = update && update.message;\n  if (!msg || !msg.chat || msg.chat.type !== 'private' || !msg.from) return null;\n\n  const chatId = msg.chat.id;\n  const fromId = normId(msg.from.id);\n  const guards = cleanRows(guardRows);\n  const sites = cleanRows(siteRows);\n  const guard = guards.find(g => normId(g.TelegramID) === fromId);\n  const text = (msg.text || '').trim();\n  const now = localParts(nowSec, cfg.TIMEZONE);\n  const out = { chatId, text: '', keyboard: 'menu', logRow: null, guardUpdate: null, alerts: [] };\n  const reply = (t, kb = 'menu') => Object.assign(out, { text: t, keyboard: kb });\n  const alertTo = (ids, t) => ids.forEach(id => out.alerts.push({ chatId: id, text: t }));\n\n  if (!guard) {\n    reply(`You are not registered yet.\\n\\nYour Telegram ID is <code>${fromId}</code>.\\nSend this number to your supervisor so they can add you.`, 'none');\n    if (/^\\/start/.test(text)) {\n      const who = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ');\n      alertTo(supervisorsFor(null, cfg),\n        `🆕 Registration request\\nName: ${esc(who)}${msg.from.username ? ' (@' + esc(msg.from.username) + ')' : ''}\\nTelegram ID: <code>${fromId}</code>\\nAdd this ID to the Guards sheet to activate.`);\n    }\n    return out;\n  }\n\n  const name = esc(guard.Name || fromId);\n  if (!isActive(guard.Active)) return reply('Your account is deactivated. Please contact your supervisor.', 'none');\n\n  const site = sites.find(s => String(s.SiteID).trim() === String(guard.SiteID).trim());\n  const siteLat = toNum(site && site.Latitude), siteLng = toNum(site && site.Longitude);\n  if (!site || siteLat === null || siteLng === null) {\n    alertTo(supervisorsFor(null, cfg), `⚙️ Setup problem: guard ${name} has SiteID \"${esc(guard.SiteID)}\" which is missing or has no coordinates in the Sites sheet.`);\n    return reply('Your site is not set up correctly. Your supervisor has been notified.', 'none');\n  }\n  const siteName = esc(site.SiteName || site.SiteID);\n  const sups = supervisorsFor(site, cfg);\n  const isIn = String(guard.Status || '').trim().toUpperCase() === 'IN';\n  const lastInTs = toNum(guard.LastCheckInTs);\n  const shift = shiftInfo(guard);\n\n  if (/^\\/(start|help|id)/.test(text) && !msg.location) {\n    return reply(`Hi ${name} 👋\\nSite: <b>${siteName}</b>${shift ? `\\nShift: ${fmtHHMM(shift.start)}–${fmtHHMM(shift.end)}` : ''}\\n\\nUse the buttons below to check in and out.`);\n  }\n\n  if (text === BTN.IN || text === BTN.OUT) {\n    const action = text === BTN.IN ? 'IN' : 'OUT';\n    if (action === 'IN' && isIn) return reply(`You are already checked in since ${esc(guard.LastCheckIn)}.`);\n    if (action === 'OUT' && !isIn) return reply('You are not checked in.');\n    out.guardUpdate = { TelegramID: guard.TelegramID, Pending: `${action}:${nowSec}` };\n    return reply(`Tap <b>📍 Share Location</b> below to check ${action.toLowerCase()} at <b>${siteName}</b>.\\n(You have ${Math.round(cfg.PENDING_TTL_SEC / 60)} minutes.)`, 'location');\n  }\n\n  if (text === BTN.CANCEL) {\n    out.guardUpdate = { TelegramID: guard.TelegramID, Pending: '' };\n    return reply('Cancelled.');\n  }\n\n  if (text === BTN.STATUS) {\n    const hrs = isIn && lastInTs ? ` (${((nowSec - lastInTs) / 3600).toFixed(1)} h)` : '';\n    return reply(`👤 ${name}\\n📍 ${siteName}\\nStatus: <b>${isIn ? 'ON DUTY' : 'OFF DUTY'}</b>${isIn ? `\\nSince: ${esc(guard.LastCheckIn)}${hrs}` : ''}${shift ? `\\nShift: ${fmtHHMM(shift.start)}–${fmtHHMM(shift.end)}` : ''}`);\n  }\n\n  if (msg.location) {\n    if (msg.forward_origin || msg.forward_date || msg.forward_from) return reply('❌ Forwarded locations are not accepted. Use the 📍 Share Location button.');\n    if (msg.venue) return reply('❌ Venue/place locations are not accepted. Use the 📍 Share Location button.');\n\n    const [pAction, pTs] = String(guard.Pending || '').split(':');\n    if (!['IN', 'OUT'].includes(pAction) || nowSec - (+pTs || 0) > cfg.PENDING_TTL_SEC) {\n      return reply(`Tap <b>${BTN.IN}</b> or <b>${BTN.OUT}</b> first, then share your location.`);\n    }\n    if (pAction === 'IN' && isIn) return reply('You are already checked in.');\n    if (pAction === 'OUT' && !isIn) return reply('You are not checked in.');\n\n    const { latitude: lat, longitude: lng, horizontal_accuracy: acc } = msg.location;\n    const radius = toNum(site.RadiusM) || 150;\n    const dist = Math.round(haversineM(lat, lng, siteLat, siteLng));\n    const within = dist <= radius;\n    const flags = [];\n    if (acc === undefined) flags.push('NO_GPS_ACCURACY');\n    else if (acc > cfg.LOW_ACCURACY_M) flags.push(`LOW_ACCURACY_${Math.round(acc)}m`);\n    if (msg.date && nowSec - msg.date > 120) flags.push('DELAYED_MESSAGE');\n    if (!within) flags.push('OUTSIDE_FENCE');\n\n    const row = {\n      Timestamp: now.stamp, Date: now.date, TelegramID: guard.TelegramID, Name: guard.Name || '',\n      SiteID: site.SiteID, SiteName: site.SiteName || '', Action: pAction,\n      Latitude: lat, Longitude: lng, DistanceM: dist, AccuracyM: acc === undefined ? '' : Math.round(acc),\n      WithinFence: within ? 'YES' : 'NO', HoursWorked: '', Flags: '',\n    };\n\n    if (!within && cfg.STRICT_GEOFENCE) {\n      row.Action = `${pAction}_REJECTED`;\n      row.Flags = flags.join(' ');\n      out.logRow = row;\n      alertTo(sups, `⛔ ${name} tried to check ${pAction.toLowerCase()} at ${siteName} but is <b>${dist} m</b> away (allowed ${radius} m).`);\n      return reply(`❌ Check-${pAction.toLowerCase()} rejected.\\nYou are <b>${dist} m</b> from ${siteName} (allowed ${radius} m).\\nMove closer and tap 📍 Share Location again.`, 'location');\n    }\n\n    if (pAction === 'IN') {\n      let lateNote = '';\n      if (shift) {\n        const late = minsSince(now.minutes, shift.start);\n        if (late > cfg.GRACE_MIN && late < shift.len) {\n          flags.push(`LATE_${late}m`);\n          lateNote = `\\n⚠️ You are ${late} min late (shift starts ${fmtHHMM(shift.start)}).`;\n          alertTo(sups, `⏰ ${name} checked in <b>${late} min late</b> at ${siteName} (shift ${fmtHHMM(shift.start)}).`);\n        }\n      }\n      row.Flags = flags.join(' ');\n      out.logRow = row;\n      out.guardUpdate = { TelegramID: guard.TelegramID, Status: 'IN', LastCheckIn: now.stamp, LastCheckInTs: nowSec, Pending: '' };\n      if (!within) alertTo(sups, `⚠️ ${name} checked in ${dist} m outside ${siteName} (geofence not enforced).`);\n      return reply(`✅ Checked in at <b>${siteName}</b>\\n🕒 ${now.time}\\n📏 ${dist} m from site${lateNote}`);\n    }\n\n    // OUT\n    const hours = lastInTs ? Math.round((nowSec - lastInTs) / 36) / 100 : '';\n    let earlyNote = '';\n    if (shift && lastInTs && nowSec - lastInTs < shift.len * 60) {\n      const early = minsSince(shift.end, now.minutes); // minutes until shift end\n      if (early > cfg.GRACE_MIN && early < shift.len) {\n        flags.push(`EARLY_OUT_${early}m`);\n        earlyNote = `\\n⚠️ ${early} min before shift end (${fmtHHMM(shift.end)}).`;\n        alertTo(sups, `🚪 ${name} checked out <b>${early} min early</b> at ${siteName} (shift ends ${fmtHHMM(shift.end)}).`);\n      }\n    }\n    row.HoursWorked = hours;\n    row.Flags = flags.join(' ');\n    out.logRow = row;\n    out.guardUpdate = { TelegramID: guard.TelegramID, Status: 'OUT', Pending: '' };\n    return reply(`👋 Checked out from <b>${siteName}</b>\\n🕒 ${now.time}${hours !== '' ? `\\n⏱ ${hours} h worked` : ''}${earlyNote}`);\n  }\n\n  return reply('Use the buttons below 👇');\n}\n\n// ---------- scheduled: no-shows & forgotten check-outs ----------\nfunction checkShifts(guardRows, siteRows, nowSec, cfg, sent) {\n  sent = Object.assign({}, sent || {});\n  const messages = [];\n  const sites = cleanRows(siteRows);\n  const now = localParts(nowSec, cfg.TIMEZONE);\n\n  for (const g of cleanRows(guardRows)) {\n    if (!isActive(g.Active) || !normId(g.TelegramID)) continue;\n    const shift = shiftInfo(g);\n    if (!shift) continue;\n    const site = sites.find(s => String(s.SiteID).trim() === String(g.SiteID).trim());\n    const sups = supervisorsFor(site, cfg);\n    const name = esc(g.Name || g.TelegramID);\n    const siteName = esc(site ? (site.SiteName || site.SiteID) : g.SiteID);\n    const isIn = String(g.Status || '').trim().toUpperCase() === 'IN';\n    const lastInTs = toNum(g.LastCheckInTs);\n\n    const since = minsSince(now.minutes, shift.start);\n    const shiftStartTs = nowSec - since * 60 - (nowSec % 60);\n    const shiftDay = localParts(shiftStartTs, cfg.TIMEZONE);\n\n    // no-show\n    if (!isIn && since > cfg.GRACE_MIN && since < shift.len && worksOn(g.WorkDays, shiftDay.weekday)) {\n      const checkedInThisShift = lastInTs && lastInTs >= shiftStartTs - cfg.EARLY_CHECKIN_MIN * 60;\n      const key = `miss:${normId(g.TelegramID)}:${shiftDay.date}`;\n      if (!checkedInThisShift && !sent[key]) {\n        sent[key] = nowSec;\n        messages.push({ chatId: normId(g.TelegramID), text: `⚠️ You have not checked in for your ${fmtHHMM(shift.start)} shift at ${siteName}. Please check in now.` });\n        sups.forEach(id => messages.push({ chatId: id, text: `🚨 <b>NO-SHOW</b>: ${name} at ${siteName}\\nShift ${fmtHHMM(shift.start)}, ${since} min ago — not checked in.` }));\n      }\n    }\n\n    // forgot to check out\n    if (isIn && lastInTs && nowSec - lastInTs > (shift.len + cfg.FORGOT_CHECKOUT_MIN) * 60) {\n      const key = `forgot:${normId(g.TelegramID)}:${lastInTs}`;\n      if (!sent[key]) {\n        sent[key] = nowSec;\n        const h = ((nowSec - lastInTs) / 3600).toFixed(1);\n        messages.push({ chatId: normId(g.TelegramID), text: `⚠️ You are still checked in (${h} h). Did you forget to check out?` });\n        sups.forEach(id => messages.push({ chatId: id, text: `❓ ${name} at ${siteName} has been checked in for <b>${h} h</b> (since ${esc(g.LastCheckIn)}). Possibly forgot to check out.` }));\n      }\n    }\n  }\n\n  for (const k of Object.keys(sent)) if (nowSec - sent[k] > 3 * 86400) delete sent[k];\n  return { messages, sent };\n}\n\n// ---------- n8n glue ----------\n\nconst update = $('Telegram Trigger').first().json;\nconst guards = $('Read Guards').all().map(i => i.json);\nconst sites = $('Read Sites').all().map(i => i.json);\nconst out = processMessage(update, guards, sites, Math.floor(Date.now() / 1000), CONFIG);\nreturn out ? [{ json: out }] : [];\n"
+      }
+    },
+    {
+      "id": "node-5",
+      "name": "Only Menu Replies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -90
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().filter(i => i.json.keyboard === 'menu').map(i => ({ json: { chatId: i.json.chatId, text: i.json.text } }));"
+      }
+    },
+    {
+      "id": "node-6",
+      "name": "Only Location Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        54
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().filter(i => i.json.keyboard === 'location').map(i => ({ json: { chatId: i.json.chatId, text: i.json.text } }));"
+      }
+    },
+    {
+      "id": "node-7",
+      "name": "Only Plain Replies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        198.00000000000003
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all().filter(i => i.json.keyboard === 'none').map(i => ({ json: { chatId: i.json.chatId, text: i.json.text } }));"
+      }
+    },
+    {
+      "id": "node-8",
+      "name": "Reply + Menu",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        -90
+      ],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "🟢 Check In"
+                  },
+                  {
+                    "text": "🔴 Check Out"
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📋 My Status"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "node-9",
+      "name": "Reply + Ask Location",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        54
+      ],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Share Location",
+                    "additionalFields": {
+                      "request_location": true
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "❌ Cancel"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "node-10",
+      "name": "Reply (no keyboard)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        198.00000000000003
+      ],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": {
+          "remove_keyboard": true
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "node-11",
+      "name": "Attendance Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        360
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const o = $input.first().json;\nreturn o.logRow ? [{ json: o.logRow }] : [];"
+      }
+    },
+    {
+      "id": "node-12",
+      "name": "Append Attendance",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        360
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Attendance",
+          "mode": "name"
+        },
+        "operation": "append",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-13",
+      "name": "Guard Update Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        503.99999999999994
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const o = $input.first().json;\nreturn o.guardUpdate ? [{ json: o.guardUpdate }] : [];"
+      }
+    },
+    {
+      "id": "node-14",
+      "name": "Update Guard",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1100,
+        503.99999999999994
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "operation": "update",
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [
+            "TelegramID"
+          ],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-15",
+      "name": "Alert Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        648
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return ($input.first().json.alerts || []).map(a => ({ json: a }));"
+      }
+    },
+    {
+      "id": "node-16",
+      "name": "Send Alerts",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        648
+      ],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "node-17",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        900
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-18",
+      "name": "Read Guards (schedule)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        220,
+        900
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Guards",
+          "mode": "name"
+        },
+        "operation": "read",
+        "options": {}
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "node-19",
+      "name": "Read Sites (schedule)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        900
+      ],
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sites",
+          "mode": "name"
+        },
+        "operation": "read",
+        "options": {}
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "node-20",
+      "name": "Check Shifts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        900
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ================= CONFIG — edit these =================\nconst CONFIG = {\n  TIMEZONE: 'Asia/Singapore',   // IANA timezone of your sites\n  ADMIN_CHAT_ID: '',            // Telegram chat ID for admin alerts (a person or a group, groups start with -100...)\n  GRACE_MIN: 15,                // minutes after shift start before a guard counts as late / no-show\n  STRICT_GEOFENCE: true,        // true = reject check-in/out outside the site radius\n  PENDING_TTL_SEC: 300,         // guard must send location within 5 min of tapping Check In/Out\n  LOW_ACCURACY_M: 100,          // GPS accuracy worse than this gets flagged\n  FORGOT_CHECKOUT_MIN: 120,     // alert if still IN this long after the shift should have ended\n  EARLY_CHECKIN_MIN: 120,       // check-ins up to 2h before shift start count for that shift\n};\n// =======================================================\n\n// ---------- shared helpers ----------\nconst BTN = {\n  IN: '🟢 Check In',\n  OUT: '🔴 Check Out',\n  STATUS: '📋 My Status',\n  CANCEL: '❌ Cancel',\n};\n\nfunction esc(s) {\n  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\n\nfunction normId(v) {\n  return String(v ?? '').replace(/[^\\d-]/g, '');\n}\n\nfunction toNum(v) {\n  const n = parseFloat(String(v ?? '').replace(/,/g, ''));\n  return Number.isFinite(n) ? n : null;\n}\n\nfunction isActive(v) {\n  return !/^(no|n|false|0|inactive)$/i.test(String(v ?? '').trim());\n}\n\n// \"08:00\", \"8:00:00\", \"8:00 PM\", \"20.00\" -> minutes after midnight\nfunction parseHHMM(v) {\n  const m = String(v ?? '').trim().match(/^(\\d{1,2})[:.](\\d{2})(?::\\d{2})?\\s*([ap]\\.?m\\.?)?$/i);\n  if (!m) return null;\n  let h = +m[1];\n  const min = +m[2];\n  if (m[3]) {\n    const pm = /^p/i.test(m[3]);\n    if (h === 12) h = pm ? 12 : 0;\n    else if (pm) h += 12;\n  }\n  if (h > 23 || min > 59) return null;\n  return h * 60 + min;\n}\n\nfunction fmtHHMM(mins) {\n  return String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');\n}\n\nfunction localParts(tsSec, tz) {\n  const parts = new Intl.DateTimeFormat('en-GB', {\n    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit', weekday: 'short', hourCycle: 'h23',\n  }).formatToParts(new Date(tsSec * 1000));\n  const p = {};\n  for (const x of parts) p[x.type] = x.value;\n  const date = `${p.year}-${p.month}-${p.day}`;\n  const time = `${p.hour}:${p.minute}:${p.second}`;\n  return { date, time, stamp: `${date} ${time}`, minutes: +p.hour * 60 + +p.minute, weekday: p.weekday };\n}\n\nconst DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];\n// WorkDays: blank = every day; \"Mon,Wed,Fri\" or \"Mon-Fri\" or \"Sat-Mon\"\nfunction worksOn(workDays, weekday) {\n  const s = String(workDays ?? '').trim();\n  if (!s) return true;\n  const target = DAYS.indexOf(weekday.slice(0, 3));\n  for (const tok of s.split(/[,\\s]+/).filter(Boolean)) {\n    const [a, b] = tok.split('-').map(t => DAYS.findIndex(d => d.toLowerCase() === t.slice(0, 3).toLowerCase()));\n    if (a < 0) continue;\n    if (b === undefined) { if (a === target) return true; continue; }\n    if (b < 0) continue;\n    for (let i = a, n = 0; n < 7; i = (i + 1) % 7, n++) {\n      if (i === target) return true;\n      if (i === b) break;\n    }\n  }\n  return false;\n}\n\nfunction haversineM(lat1, lng1, lat2, lng2) {\n  const R = 6371000, r = x => x * Math.PI / 180;\n  const dLat = r(lat2 - lat1), dLng = r(lng2 - lng1);\n  const a = Math.sin(dLat / 2) ** 2 + Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(dLng / 2) ** 2;\n  return 2 * R * Math.asin(Math.sqrt(a));\n}\n\n// minutes since the most recent occurrence of `startMin` (0..1439)\nfunction minsSince(nowMin, startMin) {\n  return (nowMin - startMin + 1440) % 1440;\n}\n\nfunction shiftInfo(guard) {\n  const start = parseHHMM(guard.ShiftStart);\n  const end = parseHHMM(guard.ShiftEnd);\n  if (start === null) return null;\n  const len = end === null ? 720 : ((end - start + 1440) % 1440 || 1440);\n  return { start, end: end === null ? (start + len) % 1440 : end, len };\n}\n\nfunction cleanRows(rows) {\n  return (rows || []).filter(r => r && Object.keys(r).some(k => k !== 'row_number' && String(r[k] ?? '').trim() !== ''));\n}\n\nfunction supervisorsFor(site, cfg) {\n  const ids = [normId(site && site.SupervisorChatID), normId(cfg.ADMIN_CHAT_ID)].filter(Boolean);\n  return [...new Set(ids)];\n}\n\n// ---------- main: handle one Telegram update ----------\nfunction processMessage(update, guardRows, siteRows, nowSec, cfg) {\n  const msg = update && update.message;\n  if (!msg || !msg.chat || msg.chat.type !== 'private' || !msg.from) return null;\n\n  const chatId = msg.chat.id;\n  const fromId = normId(msg.from.id);\n  const guards = cleanRows(guardRows);\n  const sites = cleanRows(siteRows);\n  const guard = guards.find(g => normId(g.TelegramID) === fromId);\n  const text = (msg.text || '').trim();\n  const now = localParts(nowSec, cfg.TIMEZONE);\n  const out = { chatId, text: '', keyboard: 'menu', logRow: null, guardUpdate: null, alerts: [] };\n  const reply = (t, kb = 'menu') => Object.assign(out, { text: t, keyboard: kb });\n  const alertTo = (ids, t) => ids.forEach(id => out.alerts.push({ chatId: id, text: t }));\n\n  if (!guard) {\n    reply(`You are not registered yet.\\n\\nYour Telegram ID is <code>${fromId}</code>.\\nSend this number to your supervisor so they can add you.`, 'none');\n    if (/^\\/start/.test(text)) {\n      const who = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ');\n      alertTo(supervisorsFor(null, cfg),\n        `🆕 Registration request\\nName: ${esc(who)}${msg.from.username ? ' (@' + esc(msg.from.username) + ')' : ''}\\nTelegram ID: <code>${fromId}</code>\\nAdd this ID to the Guards sheet to activate.`);\n    }\n    return out;\n  }\n\n  const name = esc(guard.Name || fromId);\n  if (!isActive(guard.Active)) return reply('Your account is deactivated. Please contact your supervisor.', 'none');\n\n  const site = sites.find(s => String(s.SiteID).trim() === String(guard.SiteID).trim());\n  const siteLat = toNum(site && site.Latitude), siteLng = toNum(site && site.Longitude);\n  if (!site || siteLat === null || siteLng === null) {\n    alertTo(supervisorsFor(null, cfg), `⚙️ Setup problem: guard ${name} has SiteID \"${esc(guard.SiteID)}\" which is missing or has no coordinates in the Sites sheet.`);\n    return reply('Your site is not set up correctly. Your supervisor has been notified.', 'none');\n  }\n  const siteName = esc(site.SiteName || site.SiteID);\n  const sups = supervisorsFor(site, cfg);\n  const isIn = String(guard.Status || '').trim().toUpperCase() === 'IN';\n  const lastInTs = toNum(guard.LastCheckInTs);\n  const shift = shiftInfo(guard);\n\n  if (/^\\/(start|help|id)/.test(text) && !msg.location) {\n    return reply(`Hi ${name} 👋\\nSite: <b>${siteName}</b>${shift ? `\\nShift: ${fmtHHMM(shift.start)}–${fmtHHMM(shift.end)}` : ''}\\n\\nUse the buttons below to check in and out.`);\n  }\n\n  if (text === BTN.IN || text === BTN.OUT) {\n    const action = text === BTN.IN ? 'IN' : 'OUT';\n    if (action === 'IN' && isIn) return reply(`You are already checked in since ${esc(guard.LastCheckIn)}.`);\n    if (action === 'OUT' && !isIn) return reply('You are not checked in.');\n    out.guardUpdate = { TelegramID: guard.TelegramID, Pending: `${action}:${nowSec}` };\n    return reply(`Tap <b>📍 Share Location</b> below to check ${action.toLowerCase()} at <b>${siteName}</b>.\\n(You have ${Math.round(cfg.PENDING_TTL_SEC / 60)} minutes.)`, 'location');\n  }\n\n  if (text === BTN.CANCEL) {\n    out.guardUpdate = { TelegramID: guard.TelegramID, Pending: '' };\n    return reply('Cancelled.');\n  }\n\n  if (text === BTN.STATUS) {\n    const hrs = isIn && lastInTs ? ` (${((nowSec - lastInTs) / 3600).toFixed(1)} h)` : '';\n    return reply(`👤 ${name}\\n📍 ${siteName}\\nStatus: <b>${isIn ? 'ON DUTY' : 'OFF DUTY'}</b>${isIn ? `\\nSince: ${esc(guard.LastCheckIn)}${hrs}` : ''}${shift ? `\\nShift: ${fmtHHMM(shift.start)}–${fmtHHMM(shift.end)}` : ''}`);\n  }\n\n  if (msg.location) {\n    if (msg.forward_origin || msg.forward_date || msg.forward_from) return reply('❌ Forwarded locations are not accepted. Use the 📍 Share Location button.');\n    if (msg.venue) return reply('❌ Venue/place locations are not accepted. Use the 📍 Share Location button.');\n\n    const [pAction, pTs] = String(guard.Pending || '').split(':');\n    if (!['IN', 'OUT'].includes(pAction) || nowSec - (+pTs || 0) > cfg.PENDING_TTL_SEC) {\n      return reply(`Tap <b>${BTN.IN}</b> or <b>${BTN.OUT}</b> first, then share your location.`);\n    }\n    if (pAction === 'IN' && isIn) return reply('You are already checked in.');\n    if (pAction === 'OUT' && !isIn) return reply('You are not checked in.');\n\n    const { latitude: lat, longitude: lng, horizontal_accuracy: acc } = msg.location;\n    const radius = toNum(site.RadiusM) || 150;\n    const dist = Math.round(haversineM(lat, lng, siteLat, siteLng));\n    const within = dist <= radius;\n    const flags = [];\n    if (acc === undefined) flags.push('NO_GPS_ACCURACY');\n    else if (acc > cfg.LOW_ACCURACY_M) flags.push(`LOW_ACCURACY_${Math.round(acc)}m`);\n    if (msg.date && nowSec - msg.date > 120) flags.push('DELAYED_MESSAGE');\n    if (!within) flags.push('OUTSIDE_FENCE');\n\n    const row = {\n      Timestamp: now.stamp, Date: now.date, TelegramID: guard.TelegramID, Name: guard.Name || '',\n      SiteID: site.SiteID, SiteName: site.SiteName || '', Action: pAction,\n      Latitude: lat, Longitude: lng, DistanceM: dist, AccuracyM: acc === undefined ? '' : Math.round(acc),\n      WithinFence: within ? 'YES' : 'NO', HoursWorked: '', Flags: '',\n    };\n\n    if (!within && cfg.STRICT_GEOFENCE) {\n      row.Action = `${pAction}_REJECTED`;\n      row.Flags = flags.join(' ');\n      out.logRow = row;\n      alertTo(sups, `⛔ ${name} tried to check ${pAction.toLowerCase()} at ${siteName} but is <b>${dist} m</b> away (allowed ${radius} m).`);\n      return reply(`❌ Check-${pAction.toLowerCase()} rejected.\\nYou are <b>${dist} m</b> from ${siteName} (allowed ${radius} m).\\nMove closer and tap 📍 Share Location again.`, 'location');\n    }\n\n    if (pAction === 'IN') {\n      let lateNote = '';\n      if (shift) {\n        const late = minsSince(now.minutes, shift.start);\n        if (late > cfg.GRACE_MIN && late < shift.len) {\n          flags.push(`LATE_${late}m`);\n          lateNote = `\\n⚠️ You are ${late} min late (shift starts ${fmtHHMM(shift.start)}).`;\n          alertTo(sups, `⏰ ${name} checked in <b>${late} min late</b> at ${siteName} (shift ${fmtHHMM(shift.start)}).`);\n        }\n      }\n      row.Flags = flags.join(' ');\n      out.logRow = row;\n      out.guardUpdate = { TelegramID: guard.TelegramID, Status: 'IN', LastCheckIn: now.stamp, LastCheckInTs: nowSec, Pending: '' };\n      if (!within) alertTo(sups, `⚠️ ${name} checked in ${dist} m outside ${siteName} (geofence not enforced).`);\n      return reply(`✅ Checked in at <b>${siteName}</b>\\n🕒 ${now.time}\\n📏 ${dist} m from site${lateNote}`);\n    }\n\n    // OUT\n    const hours = lastInTs ? Math.round((nowSec - lastInTs) / 36) / 100 : '';\n    let earlyNote = '';\n    if (shift && lastInTs && nowSec - lastInTs < shift.len * 60) {\n      const early = minsSince(shift.end, now.minutes); // minutes until shift end\n      if (early > cfg.GRACE_MIN && early < shift.len) {\n        flags.push(`EARLY_OUT_${early}m`);\n        earlyNote = `\\n⚠️ ${early} min before shift end (${fmtHHMM(shift.end)}).`;\n        alertTo(sups, `🚪 ${name} checked out <b>${early} min early</b> at ${siteName} (shift ends ${fmtHHMM(shift.end)}).`);\n      }\n    }\n    row.HoursWorked = hours;\n    row.Flags = flags.join(' ');\n    out.logRow = row;\n    out.guardUpdate = { TelegramID: guard.TelegramID, Status: 'OUT', Pending: '' };\n    return reply(`👋 Checked out from <b>${siteName}</b>\\n🕒 ${now.time}${hours !== '' ? `\\n⏱ ${hours} h worked` : ''}${earlyNote}`);\n  }\n\n  return reply('Use the buttons below 👇');\n}\n\n// ---------- scheduled: no-shows & forgotten check-outs ----------\nfunction checkShifts(guardRows, siteRows, nowSec, cfg, sent) {\n  sent = Object.assign({}, sent || {});\n  const messages = [];\n  const sites = cleanRows(siteRows);\n  const now = localParts(nowSec, cfg.TIMEZONE);\n\n  for (const g of cleanRows(guardRows)) {\n    if (!isActive(g.Active) || !normId(g.TelegramID)) continue;\n    const shift = shiftInfo(g);\n    if (!shift) continue;\n    const site = sites.find(s => String(s.SiteID).trim() === String(g.SiteID).trim());\n    const sups = supervisorsFor(site, cfg);\n    const name = esc(g.Name || g.TelegramID);\n    const siteName = esc(site ? (site.SiteName || site.SiteID) : g.SiteID);\n    const isIn = String(g.Status || '').trim().toUpperCase() === 'IN';\n    const lastInTs = toNum(g.LastCheckInTs);\n\n    const since = minsSince(now.minutes, shift.start);\n    const shiftStartTs = nowSec - since * 60 - (nowSec % 60);\n    const shiftDay = localParts(shiftStartTs, cfg.TIMEZONE);\n\n    // no-show\n    if (!isIn && since > cfg.GRACE_MIN && since < shift.len && worksOn(g.WorkDays, shiftDay.weekday)) {\n      const checkedInThisShift = lastInTs && lastInTs >= shiftStartTs - cfg.EARLY_CHECKIN_MIN * 60;\n      const key = `miss:${normId(g.TelegramID)}:${shiftDay.date}`;\n      if (!checkedInThisShift && !sent[key]) {\n        sent[key] = nowSec;\n        messages.push({ chatId: normId(g.TelegramID), text: `⚠️ You have not checked in for your ${fmtHHMM(shift.start)} shift at ${siteName}. Please check in now.` });\n        sups.forEach(id => messages.push({ chatId: id, text: `🚨 <b>NO-SHOW</b>: ${name} at ${siteName}\\nShift ${fmtHHMM(shift.start)}, ${since} min ago — not checked in.` }));\n      }\n    }\n\n    // forgot to check out\n    if (isIn && lastInTs && nowSec - lastInTs > (shift.len + cfg.FORGOT_CHECKOUT_MIN) * 60) {\n      const key = `forgot:${normId(g.TelegramID)}:${lastInTs}`;\n      if (!sent[key]) {\n        sent[key] = nowSec;\n        const h = ((nowSec - lastInTs) / 3600).toFixed(1);\n        messages.push({ chatId: normId(g.TelegramID), text: `⚠️ You are still checked in (${h} h). Did you forget to check out?` });\n        sups.forEach(id => messages.push({ chatId: id, text: `❓ ${name} at ${siteName} has been checked in for <b>${h} h</b> (since ${esc(g.LastCheckIn)}). Possibly forgot to check out.` }));\n      }\n    }\n  }\n\n  for (const k of Object.keys(sent)) if (nowSec - sent[k] > 3 * 86400) delete sent[k];\n  return { messages, sent };\n}\n\n// ---------- n8n glue ----------\n\nconst store = $getWorkflowStaticData('global');\nconst guards = $('Read Guards (schedule)').all().map(i => i.json);\nconst sites = $('Read Sites (schedule)').all().map(i => i.json);\nconst { messages, sent } = checkShifts(guards, sites, Math.floor(Date.now() / 1000), CONFIG, store.sent);\nstore.sent = sent; // remembers which alerts were already sent (only saved when the workflow is active)\nreturn messages.map(m => ({ json: m }));\n"
+      }
+    },
+    {
+      "id": "node-21",
+      "name": "Send Shift Alerts",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        900
+      ],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Guards",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Guards": {
+      "main": [
+        [
+          {
+            "node": "Read Sites",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Sites": {
+      "main": [
+        [
+          {
+            "node": "Process Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Message": {
+      "main": [
+        [
+          {
+            "node": "Only Menu Replies",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Only Location Requests",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Only Plain Replies",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Attendance Row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Guard Update Row",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Alert Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Menu Replies": {
+      "main": [
+        [
+          {
+            "node": "Reply + Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Location Requests": {
+      "main": [
+        [
+          {
+            "node": "Reply + Ask Location",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only Plain Replies": {
+      "main": [
+        [
+          {
+            "node": "Reply (no keyboard)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attendance Row": {
+      "main": [
+        [
+          {
+            "node": "Append Attendance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard Update Row": {
+      "main": [
+        [
+          {
+            "node": "Update Guard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Messages": {
+      "main": [
+        [
+          {
+            "node": "Send Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Read Guards (schedule)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Guards (schedule)": {
+      "main": [
+        [
+          {
+            "node": "Read Sites (schedule)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Sites (schedule)": {
+      "main": [
+        [
+          {
+            "node": "Check Shifts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Shifts": {
+      "main": [
+        [
+          {
+            "node": "Send Shift Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
