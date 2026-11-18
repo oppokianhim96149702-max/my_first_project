@@ -20,6 +20,7 @@
 }
 html, body { height: 100%; }
 [hidden] { display: none !important; }
+body { margin: 0; }
 body {
   background: var(--bg);
   color: var(--fg);
@@ -29,119 +30,82 @@ body {
 }
 .app {
   height: 100%;
-  max-width: 640px;
+  max-width: 900px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-block: 10px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  gap: 4px;
+  padding-block: 4px;
   box-sizing: border-box;
 }
-.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-h1 {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 1.25rem;
-  letter-spacing: 0.02em;
-  margin: 0;
+.top, .status {
+  padding-left: max(8px, env(safe-area-inset-left, 0px));
+  padding-right: max(8px, env(safe-area-inset-right, 0px));
 }
-h1 span { color: var(--brass); }
-.seg { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
-.seg button {
-  font: 600 0.78rem var(--font-body);
-  color: var(--muted);
-  background: none; border: 0; border-radius: 999px;
-  padding: 6px 12px; cursor: pointer;
-}
-.seg button[aria-pressed="true"] { background: var(--brass); color: #1b1407; }
-.score { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.top { display: flex; align-items: center; gap: 4px; }
 .player {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 5px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px 10px;
+  border-radius: 999px;
+  padding: 3px 8px 3px 3px;
   min-width: 0;
-  transition: border-color .2s, box-shadow .2s;
+  font-size: 0.78rem; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .player.active { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass) inset; }
-.chip { width: 26px; height: 26px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 3px rgba(0,0,0,.18), inset 0 0 0 7px rgba(255,255,255,.12); }
+.chip { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 2px rgba(0,0,0,.18); }
 .chip.white { background: var(--ivory); }
-.chip.black { background: var(--ebony); box-shadow: inset 0 0 0 3px rgba(255,255,255,.12), inset 0 0 0 7px rgba(255,255,255,.06); }
-.pinfo { min-width: 0; flex: 1; }
-.pname { font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pcount { font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.qbadge { width: 14px; height: 14px; border-radius: 50%; background: var(--queen); flex: none; opacity: .15; transition: opacity .2s; }
-.qbadge.on { opacity: 1; box-shadow: 0 0 0 2px rgba(201,48,58,.35); }
+.chip.black { background: var(--ebony); box-shadow: inset 0 0 0 2px rgba(255,255,255,.18); }
+.qbadge { width: 9px; height: 9px; border-radius: 50%; background: var(--queen); flex: none; opacity: .15; }
+.qbadge.on { opacity: 1; }
+.spacer { flex: 1; }
+.btn {
+  font: 600 0.75rem var(--font-body);
+  background: var(--panel); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 8px; cursor: pointer;
+  white-space: nowrap;
+}
 .status {
-  min-height: 1.3em;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: var(--muted);
   text-align: center;
-  text-wrap: balance;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-height: 1.2em;
 }
 .status b { color: var(--fg); font-weight: 600; }
 .status.alert b { color: #f08a7e; }
 .status.good b { color: var(--brass); }
-.boardwrap { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; }
-canvas { display: block; touch-action: none; border-radius: 14px; box-shadow: 0 18px 40px rgba(0,0,0,.45); }
-.overlay {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-}
+.boardwrap { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+canvas { display: block; touch-action: none; }
+.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
 .card {
   background: rgba(18,32,30,.94);
   border: 1px solid var(--brass);
   border-radius: 16px;
-  padding: 22px 26px;
+  padding: 20px 24px;
   text-align: center;
   display: flex; flex-direction: column; gap: 10px; align-items: center;
   max-width: 80%;
 }
-.card h2 { font-family: var(--font-display); margin: 0; font-size: 1.5rem; }
+.card h2 { font-family: var(--font-display); margin: 0; font-size: 1.4rem; }
 .card p { margin: 0; color: var(--muted); font-size: 0.9rem; }
-.rail { display: flex; align-items: center; gap: 12px; }
-.rail label { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); flex: none; }
-input[type=range] { flex: 1; min-width: 0; accent-color: var(--brass); height: 28px; }
-.bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
-.btn {
-  font: 600 0.85rem var(--font-body);
-  background: var(--panel); color: var(--fg);
-  border: 1px solid var(--line); border-radius: 10px;
-  padding: 9px 14px; cursor: pointer;
-  white-space: nowrap;
-}
-.btn.primary { background: var(--brass); color: #1b1407; border-color: var(--brass); }
-.btn:focus-visible, .seg button:focus-visible, input:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
-.hint { font-size: 0.72rem; color: var(--muted); text-align: right; }
-@media (prefers-reduced-motion: reduce) { .player { transition: none; } }
+.btn.primary { background: var(--brass); color: #1b1407; border-color: var(--brass); font-size: 0.9rem; padding: 9px 16px; }
+.btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
 </style>
 
 <div class="app">
   <div class="top">
-    <h1>Carrom <span>Club</span></h1>
-    <div class="seg" role="group" aria-label="Opponent">
-      <button id="modeAi" aria-pressed="true">vs Computer</button>
-      <button id="modePvp" aria-pressed="false">2 Players</button>
-    </div>
+    <div class="player" id="p0"><div class="chip white"></div><span id="p0name">You</span><span id="p0count">0/9</span><div class="qbadge" id="p0q" title="Queen covered"></div></div>
+    <div class="player" id="p1"><div class="chip black"></div><span id="p1name">CPU</span><span id="p1count">0/9</span><div class="qbadge" id="p1q" title="Queen covered"></div></div>
+    <div class="spacer"></div>
+    <button class="btn" id="mode" title="Switch opponent">vs CPU</button>
+    <button class="btn" id="sound" aria-pressed="true" title="Sound">🔊</button>
+    <button class="btn" id="newGame" title="New game">New</button>
   </div>
-
-  <div class="score">
-    <div class="player" id="p0">
-      <div class="chip white"></div>
-      <div class="pinfo"><div class="pname" id="p0name">You</div><div class="pcount" id="p0count">0 / 9 pocketed</div></div>
-      <div class="qbadge" id="p0q" title="Queen covered"></div>
-    </div>
-    <div class="player" id="p1">
-      <div class="chip black"></div>
-      <div class="pinfo"><div class="pname" id="p1name">Computer</div><div class="pcount" id="p1count">0 / 9 pocketed</div></div>
-      <div class="qbadge" id="p1q" title="Queen covered"></div>
-    </div>
-  </div>
-
-  <div class="status" id="status"><b>Your break.</b> Slide the striker, then pull back from it and release.</div>
 
   <div class="boardwrap" id="wrap">
     <canvas id="cv" aria-label="Carrom board"></canvas>
@@ -154,22 +118,14 @@ input[type=range] { flex: 1; min-width: 0; accent-color: var(--brass); height: 2
     </div>
   </div>
 
-  <div class="rail">
-    <label for="slider">Striker</label>
-    <input type="range" id="slider" min="0" max="1000" value="500">
-  </div>
-  <div class="bar">
-    <button class="btn" id="newGame">New game</button>
-    <button class="btn" id="sound" aria-pressed="true">Sound on</button>
-    <div class="hint">Pocket your coins, then the queen and cover it.</div>
-  </div>
+  <div class="status" id="status"><b>Your break.</b> Drag along your line to move, pull back from the striker to shoot.</div>
 </div>
 
 <script>
 (() => {
 'use strict';
 // ---------- constants (board units) ----------
-const S = 1000, F = 64, T = S + 2 * F;
+const S = 1000, F = 30, T = S + 2 * F;
 const RC = 20, RS = 26, MC = 1, MS = 2.3;
 const POCKETS = [[38, 38], [S - 38, 38], [38, S - 38], [S - 38, S - 38]];
 const POCKET_R = 40, CAPTURE = 33;
@@ -208,14 +164,14 @@ function newGame() {
     bodies.push(makeBody(k % 2 ? 'white' : 'black', c + Math.cos(b) * dd, c + Math.sin(b) * dd));
   }
   players = [
-    { color: 'white', name: mode === 'ai' ? 'You' : 'Player 1', ai: false },
-    { color: 'black', name: mode === 'ai' ? 'Computer' : 'Player 2', ai: mode === 'ai' },
+    { color: 'white', name: mode === 'ai' ? 'You' : 'P1', ai: false },
+    { color: 'black', name: mode === 'ai' ? 'CPU' : 'P2', ai: mode === 'ai' },
   ];
   turn = 0; queenPending = null; queenOwner = null; aim = null; drag = null; aiAnim = null;
   $('over').hidden = true;
   startTurn(true);
-  setStatus(mode === 'ai' ? '<b>Your break.</b> Slide the striker, then pull back from it and release.'
-    : '<b>Player 1 breaks.</b> Slide the striker, then pull back from it and release.');
+  setStatus(mode === 'ai' ? '<b>Your break.</b> Drag along your line to move, pull back from the striker to shoot.'
+    : '<b>P1 breaks.</b> Drag along your line to move, pull back from the striker to shoot.');
 }
 
 function remaining(color) { return bodies.filter(b => b.kind === color && b.on).length; }
@@ -498,7 +454,7 @@ function setStrikerX(x) {
   striker.x = Math.max(XMIN, Math.min(XMAX, x));
   syncSlider();
 }
-function syncSlider() { $('slider').value = Math.round((striker.x - XMIN) / (XMAX - XMIN) * 1000); }
+function syncSlider() {}
 function humanCanAct() { return phase === 'aim' && !players[turn].ai; }
 
 cv.addEventListener('pointerdown', e => {
@@ -507,7 +463,7 @@ cv.addEventListener('pointerdown', e => {
   const p = toBoard(e);
   cv.setPointerCapture(e.pointerId);
   if (Math.hypot(p.x - striker.x, p.y - striker.y) < RS * 2.4) { drag = 'aim'; aim = null; }
-  else if (Math.abs(p.y - BASE_Y[turn]) < 75) { drag = 'place'; setStrikerX(p.x); }
+  else if (Math.abs(p.y - BASE_Y[turn]) < 90) { drag = 'place'; setStrikerX(p.x); }
   else { drag = 'aim'; aim = null; }
 });
 cv.addEventListener('pointermove', e => {
@@ -528,24 +484,18 @@ function endDrag() {
 }
 cv.addEventListener('pointerup', endDrag);
 cv.addEventListener('pointercancel', () => { drag = null; aim = null; });
-$('slider').addEventListener('input', e => {
-  if (!humanCanAct()) { syncSlider(); return; }
-  striker.x = XMIN + e.target.value / 1000 * (XMAX - XMIN);
-});
 $('newGame').addEventListener('click', newGame);
 $('again').addEventListener('click', newGame);
 function setMode(m) {
   mode = m;
   try { localStorage.setItem('carrom-mode', m); } catch (e) {}
-  $('modeAi').setAttribute('aria-pressed', m === 'ai');
-  $('modePvp').setAttribute('aria-pressed', m === 'pvp');
+  $('mode').textContent = m === 'ai' ? 'vs CPU' : '2P';
   newGame();
 }
-$('modeAi').addEventListener('click', () => setMode('ai'));
-$('modePvp').addEventListener('click', () => setMode('pvp'));
+$('mode').addEventListener('click', () => setMode(mode === 'ai' ? 'pvp' : 'ai'));
 $('sound').addEventListener('click', () => {
   soundOn = !soundOn;
-  $('sound').textContent = soundOn ? 'Sound on' : 'Sound off';
+  $('sound').textContent = soundOn ? '🔊' : '🔇';
   $('sound').setAttribute('aria-pressed', soundOn);
 });
 
@@ -576,8 +526,8 @@ function setStatus(html, tone) {
 }
 function updateHud() {
   for (let i = 0; i < 2; i++) {
-    $('p' + i + 'name').textContent = players[i].name + (players[i].ai ? '' : '') ;
-    $('p' + i + 'count').textContent = `${9 - remaining(players[i].color)} / 9 pocketed` + (queenPending === i ? ' · cover the queen' : '');
+    $('p' + i + 'name').textContent = players[i].name;
+    $('p' + i + 'count').textContent = `${9 - remaining(players[i].color)}/9`;
     $('p' + i + 'q').classList.toggle('on', queenOwner === i);
     $('p' + i).classList.toggle('active', turn === i && phase !== 'over');
   }
@@ -586,7 +536,7 @@ function updateHud() {
 // ---------- rendering ----------
 function resize() {
   const w = $('wrap');
-  const size = Math.max(200, Math.floor(Math.min(w.clientWidth, w.clientHeight)));
+  const size = Math.max(200, Math.floor(Math.min(w.getBoundingClientRect().width, w.getBoundingClientRect().height)));
   dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   cssSize = size;
   cv.style.width = cv.style.height = size + 'px';
@@ -603,12 +553,12 @@ function drawBoard(g, k) {
   const fr = g.createLinearGradient(0, 0, T, T);
   fr.addColorStop(0, '#6b3219'); fr.addColorStop(0.5, '#4a2010'); fr.addColorStop(1, '#5c2a14');
   g.fillStyle = fr;
-  roundRect(g, 0, 0, T, T, 34); g.fill();
+  roundRect(g, 0, 0, T, T, 14); g.fill();
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   g.globalAlpha = 0.12; g.strokeStyle = '#1e0b04';
   for (let i = 0; i < 40; i++) { g.lineWidth = 1 + rnd() * 2; g.beginPath(); const y = rnd() * T; g.moveTo(0, y); g.bezierCurveTo(T * .3, y + rnd() * 20 - 10, T * .6, y + rnd() * 20 - 10, T, y + rnd() * 10 - 5); g.stroke(); }
   g.globalAlpha = 1;
-  g.fillStyle = '#2a1209'; g.fillRect(F - 8, F - 8, S + 16, S + 16);
+  g.fillStyle = '#2a1209'; g.fillRect(F - 4, F - 4, S + 8, S + 8);
   g.translate(F, F);
   // playing surface (maple ply)
   const sf = g.createLinearGradient(0, 0, S, S);
@@ -798,8 +748,7 @@ function frame(now) {
 }
 
 new ResizeObserver(resize).observe($('wrap'));
-$('modeAi').setAttribute('aria-pressed', mode === 'ai');
-$('modePvp').setAttribute('aria-pressed', mode === 'pvp');
+$('mode').textContent = mode === 'ai' ? 'vs CPU' : '2P';
 newGame();
 resize();
 requestAnimationFrame(frame);
